@@ -1,6 +1,8 @@
 import 'package:ikvpack/ikvpack.dart';
 
 void main() {
-  var awesome = Awesome();
-  print('awesome: ${awesome.isAwesome}');
+  var p = IkvPack();
+  p.packToFile('path', {});
+  // var awesome = Awesome();
+  // print('awesome: ${awesome.isAwesome}');
 }
