@@ -1,13 +1,13 @@
-/// Indexed Key Value pack allows saving to a file a sorted key/value collection (Map<String, UNit8List>).
+/// Indexed Key Value pack allows saving to a file a sorted key/value collection (Map<String, String>).
 /// The file can be quickly loaded and provide read-only access to the collection.
 /// The main idea is that keys are indexed which allows fast binary serarches among them
 /// - in contrast to typical Map implementations keys are accessed via iterator.
+/// Values are stored in binarry format compressed via Zlib - they are decomressed on the fly upon fetching.
 ///
 /// Copyright (c) 2020 Maxim Saplin
 library ikvpack;
 
 export 'src/ikvpack_base.dart';
-export 'src/ikvpack_vm.dart';
-export 'src/ikvpack_web.dart';
-
-// TODO: Export any libraries intended for clients of this package.
+export 'src/ikvpack_vm.dart'
+    if (dart.library.io) 'src/ikvpack_vm.dart'
+    if (dart.library.html) 'src/ikvpack_web.dart';
