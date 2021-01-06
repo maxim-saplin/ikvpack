@@ -64,6 +64,10 @@ abstract class IkvPackBase {
 
   UnmodifiableListView<String> _keysReadOnly = UnmodifiableListView<String>([]);
   UnmodifiableListView<String> get keys => _keysReadOnly;
+  UnmodifiableListView<List<int>> _valuesBytes =
+      UnmodifiableListView<List<int>>([]);
+
+  UnmodifiableListView<List<int>> get valuesBytes => _valuesBytes;
 
   /// Web implementation does not support indexed keys
   bool get indexedKeys;
@@ -96,6 +100,7 @@ abstract class IkvPackBase {
     }, growable: false);
 
     _keysReadOnly = UnmodifiableListView<String>(_keysList);
+    _valuesBytes = UnmodifiableListView<List<int>>(_valuesBytes);
     _buildBaskets();
   }
 
