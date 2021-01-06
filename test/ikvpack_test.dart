@@ -29,70 +29,6 @@ void runCommonTests(IkvPack ikv) {
     expect(v, '<div>вспахать</div>');
   });
 
-  test('Passing empty Map throws AssertionError', () {
-    var m = <String, String>{};
-    expect(() => IkvPack.fromStringMap(m), throwsA(isA<AssertionError>()));
-  });
-
-  test('Passing empty Key throws AssertionError', () {
-    var m = <String, String>{'': 'sdsd'};
-    expect(() => IkvPack.fromStringMap(m), throwsA(isA<AssertionError>()));
-  });
-
-  test('Passing empty Value throws AssertionError', () {
-    var m = <String, String>{'ss': ''};
-    expect(() => IkvPack.fromStringMap(m), throwsA(isA<AssertionError>()));
-  });
-
-  test('Empty Keys are deleted', () {
-    var m = <String, String>{
-      '': 'sdsd',
-      'wew': 'dsdsd',
-      '\n\r': 'sdsd',
-      'sdss': 'd'
-    };
-    var ik = IkvPack.fromStringMap(m);
-    expect(ik.length, 2);
-    expect(ik.containsKey('wew'), true);
-    expect(ik.containsKey('sdss'), true);
-  });
-
-  test('Empty Values are deleted', () {
-    var m = <String, String>{'': '', 'wew': 'dsdsd', 'sss': '', 'sdss': 'd'};
-    var ik = IkvPack.fromStringMap(m);
-    expect(ik.length, 2);
-    expect(ik['wew'], 'dsdsd');
-    expect(ik['sdss'], 'd');
-  });
-
-  test('Keys are properly sanitized', () {
-    var m = <String, String>{
-      '\n\r': 'sdsd',
-      '\r': 'asdads',
-      '\n': 'sfsd',
-      'sas\ndfsd': 'sdfs',
-      'x' * 256: 'adsa'
-    };
-    var ik = IkvPack.fromStringMap(m);
-    expect(ik.length, 2);
-    expect(ik.keys[0], 'sasdfsd');
-    expect(ik.keys[1].length, 255);
-  });
-
-  test('Key corner cases (single items key baskets)', () {
-    var m = <String, String>{'a': 'aaa', 'b': 'bbb', 'c': 'ccc'};
-    var ik = IkvPack.fromStringMap(m);
-    expect(ik.length, 3);
-    expect(ik['a'], 'aaa');
-    expect(ik['b'], 'bbb');
-    expect(ik['c'], 'ccc');
-  });
-
-  test('Key keysStartingWith() limits the result', () {
-    var keys = ikv.keysStartingWith('an', 3);
-    expect(keys.length, 3);
-  });
-
   test('Key keysStartingWith() finds the key', () {
     var keys = ikv.keysStartingWith('aerosol', 3);
     expect(keys[0], 'aerosol bomb');
@@ -119,6 +55,11 @@ void runCaseInsensitiveTests(IkvPack ikv) {
     expect(ikv.keys[ikv.keys.length - 1] == 'яскравасьць', true);
   });
 
+  test('Key keysStartingWith() limits the result', () {
+    var keys = ikv.keysStartingWith('an', 3);
+    expect(keys.length, 3);
+  });
+
   test('Key keysStartingWith() conducts case- insensitive search', () {
     var keys = ikv.keysStartingWith('ЗЬ');
     expect(keys.length, 6);
@@ -140,6 +81,66 @@ void runFileRelatedTests(IkvPack ikv) {
 }
 
 void main() {
+  group('Corner cases', () {
+    test('Passing empty Map throws AssertionError', () {
+      var m = <String, String>{};
+      expect(() => IkvPack.fromStringMap(m), throwsA(isA<AssertionError>()));
+    });
+
+    test('Passing empty Key throws AssertionError', () {
+      var m = <String, String>{'': 'sdsd'};
+      expect(() => IkvPack.fromStringMap(m), throwsA(isA<AssertionError>()));
+    });
+
+    test('Passing empty Value throws AssertionError', () {
+      var m = <String, String>{'ss': ''};
+      expect(() => IkvPack.fromStringMap(m), throwsA(isA<AssertionError>()));
+    });
+
+    test('Empty Keys are deleted', () {
+      var m = <String, String>{
+        '': 'sdsd',
+        'wew': 'dsdsd',
+        '\n\r': 'sdsd',
+        'sdss': 'd'
+      };
+      var ik = IkvPack.fromStringMap(m);
+      expect(ik.length, 2);
+      expect(ik.containsKey('wew'), true);
+      expect(ik.containsKey('sdss'), true);
+    });
+
+    test('Empty Values are deleted', () {
+      var m = <String, String>{'': '', 'wew': 'dsdsd', 'sss': '', 'sdss': 'd'};
+      var ik = IkvPack.fromStringMap(m);
+      expect(ik.length, 2);
+      expect(ik['wew'], 'dsdsd');
+      expect(ik['sdss'], 'd');
+    });
+
+    test('Keys are properly sanitized', () {
+      var m = <String, String>{
+        '\n\r': 'sdsd',
+        '\r': 'asdads',
+        '\n': 'sfsd',
+        'sas\ndfsd': 'sdfs',
+        'x' * 256: 'adsa'
+      };
+      var ik = IkvPack.fromStringMap(m);
+      expect(ik.length, 2);
+      expect(ik.keys[0], 'sasdfsd');
+      expect(ik.keys[1].length, 255);
+    });
+
+    test('Single item key baskets)', () {
+      var m = <String, String>{'a': 'aaa', 'b': 'bbb', 'c': 'ccc'};
+      var ik = IkvPack.fromStringMap(m);
+      expect(ik.length, 3);
+      expect(ik['a'], 'aaa');
+      expect(ik['b'], 'bbb');
+      expect(ik['c'], 'ccc');
+    });
+  });
   group('In-memory tests, case-insensitive', () {
     _ikv = IkvPack.fromStringMap(testMap, true);
     runCommonTests(_ikv as IkvPack);
