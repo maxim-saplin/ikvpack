@@ -3,9 +3,6 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'ikvpack_base.dart';
-export 'ikvpack_vm.dart'
-    if (dart.library.io) 'src/ikvpack_vm.dart'
-    if (dart.library.html) 'src/ikvpack_web.dart';
 
 /// File layout
 ///
