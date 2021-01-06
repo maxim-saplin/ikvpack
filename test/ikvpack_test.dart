@@ -1,13 +1,143 @@
 import 'package:ikvpack/ikvpack.dart';
 import 'package:test/test.dart';
 
-IkvPack ikv = IkvPack.fromStringMap(testMap);
+IkvPack? _ikv;
+
+void runCommonTests(IkvPack ikv) {
+  test('Can serach key by index', () {
+    var k = ikv.keys[0];
+    expect(k, '36');
+    k = ikv.keys[1];
+    expect(k, 'Aaron Burr');
+  });
+
+  test('Can serach value by index', () {
+    var v = ikv.valueAt(0);
+    expect(
+        v.startsWith(
+            '<div><i>adjective</i></div><div>being six more than thirty'),
+        true);
+    v = ikv.valueAt(1);
+    expect(
+        v.startsWith(
+            '<div><i>noun</i></div><div>United States politician who served'),
+        true);
+  });
+
+  test('Can serach value by key', () {
+    var v = ikv['зараць'];
+    expect(v, '<div>вспахать</div>');
+  });
+
+  test('Passing empty Map throws AssertionError', () {
+    var m = <String, String>{};
+    expect(() => IkvPack.fromStringMap(m), throwsA(isA<AssertionError>()));
+  });
+
+  test('Passing empty Keys throws AssertionError', () {
+    var m = <String, String>{'': 'sdsd'};
+    expect(() => IkvPack.fromStringMap(m), throwsA(isA<AssertionError>()));
+  });
+
+  test('Keys are properly sanitized', () {
+    var m = <String, String>{
+      '\n\r': 'sdsd',
+      '\r': 'asdads',
+      '\n': 'sfsd',
+      'sas\ndfsd': 'sdfs',
+      'x' * 256: 'adsa'
+    };
+    var ik = IkvPack.fromStringMap(m);
+    expect(ik.length, 2);
+    expect(ik.keys[0], 'sasdfsd');
+    expect(ik.keys[1].length, 255);
+  });
+
+  test('Key corner cases (single items key baskets)', () {
+    var m = <String, String>{'a': 'aaa', 'b': 'bbb', 'c': 'ccc'};
+    var ik = IkvPack.fromStringMap(m);
+    expect(ik.length, 3);
+    expect(ik['a'], 'aaa');
+    expect(ik['b'], 'bbb');
+    expect(ik['c'], 'ccc');
+  });
+
+  test('Key keysStartingWith() limits the result', () {
+    var keys = ikv.keysStartingWith('an', 3);
+    expect(keys.length, 3);
+  });
+
+  test('Key keysStartingWith() finds the key', () {
+    var keys = ikv.keysStartingWith('aerosol', 3);
+    expect(keys[0], 'aerosol bomb');
+  });
+}
+
+void runCaseInsensitiveTests(IkvPack ikv) {
+  test('Out of order keys are fixed (ё isnt below я)', () {
+    var k = ikv.keys[ikv.keys.length - 1];
+    expect(k, 'яскравасьць');
+  });
+
+  test('Case-insensitive search by key works', () {
+    var v = ikv['afrikaans'];
+    expect(
+        v.startsWith(
+            '<div><b>I</b></div><div><i>noun</i></div><div>an official language of the'),
+        true);
+  });
+
+  test('Keys are sorted', () {
+    expect(ikv.keys[ikv.keys.length - 8] == 'эліпс', true);
+    expect(ikv.keys[ikv.keys.length - 3] == 'юродзівасьць', true);
+    expect(ikv.keys[ikv.keys.length - 1] == 'яскравасьць', true);
+  });
+
+  test('Key keysStartingWith() conducts case- insensitive search', () {
+    var keys = ikv.keysStartingWith('ЗЬ');
+    expect(keys.length, 6);
+  });
+}
+
+void runInMemoryRelatedTests(IkvPack ikv) {
+  test('fromMap() constructor property inits object', () {
+    expect(ikv.indexedKeys, true);
+    expect(ikv.valuesInMemory, true);
+  });
+}
+
+void runFileRelatedTests(IkvPack ikv) {
+  test('Default constructore properky inits object', () {
+    expect(ikv.indexedKeys, true);
+    expect(ikv.valuesInMemory, false);
+  });
+}
+
 void main() {
-  group('IkvPackBase tests', () {
-    test('Can serach key by index', () {
-      var k = ikv.keys[0];
-      expect(k, '36');
-    });
+  group('In-memory tests, case-insensitive', () {
+    _ikv = IkvPack.fromStringMap(testMap, true);
+    runCommonTests(_ikv as IkvPack);
+    runCaseInsensitiveTests(_ikv as IkvPack);
+    runInMemoryRelatedTests(_ikv as IkvPack);
+  });
+
+  group('File tests, case-insensitive', () {
+    _ikv = IkvPack.fromStringMap(testMap, true);
+
+    runCommonTests(_ikv as IkvPack);
+    runCaseInsensitiveTests(_ikv as IkvPack);
+  });
+
+  group('In-memory tests, case-sensitive', () {
+    _ikv = IkvPack.fromStringMap(testMap, false);
+    runCommonTests(_ikv as IkvPack);
+    runInMemoryRelatedTests(_ikv as IkvPack);
+  });
+
+  group('File tests, case-sensitive', () {
+    _ikv = IkvPack.fromStringMap(testMap, false);
+
+    runCommonTests(_ikv as IkvPack);
   });
 }
 
