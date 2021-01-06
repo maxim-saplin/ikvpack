@@ -34,9 +34,35 @@ void runCommonTests(IkvPack ikv) {
     expect(() => IkvPack.fromStringMap(m), throwsA(isA<AssertionError>()));
   });
 
-  test('Passing empty Keys throws AssertionError', () {
+  test('Passing empty Key throws AssertionError', () {
     var m = <String, String>{'': 'sdsd'};
     expect(() => IkvPack.fromStringMap(m), throwsA(isA<AssertionError>()));
+  });
+
+  test('Passing empty Value throws AssertionError', () {
+    var m = <String, String>{'ss': ''};
+    expect(() => IkvPack.fromStringMap(m), throwsA(isA<AssertionError>()));
+  });
+
+  test('Empty Keys are deleted', () {
+    var m = <String, String>{
+      '': 'sdsd',
+      'wew': 'dsdsd',
+      '\n\r': 'sdsd',
+      'sdss': 'd'
+    };
+    var ik = IkvPack.fromStringMap(m);
+    expect(ik.length, 2);
+    expect(ik.containsKey('wew'), true);
+    expect(ik.containsKey('sdss'), true);
+  });
+
+  test('Empty Values are deleted', () {
+    var m = <String, String>{'': '', 'wew': 'dsdsd', 'sss': '', 'sdss': 'd'};
+    var ik = IkvPack.fromStringMap(m);
+    expect(ik.length, 2);
+    expect(ik['wew'], 'dsdsd');
+    expect(ik['sdss'], 'd');
   });
 
   test('Keys are properly sanitized', () {

@@ -110,9 +110,9 @@ abstract class IkvPackBase {
       entries = map.entries.map((e) => _Triple.noLowerCase(e.key, e.value));
     }
 
-    var list = _fixeKeys(entries);
+    var list = _fixKeysAndValues(entries);
 
-    assert(list.isNotEmpty, 'Keys can\'t contain only empty strings');
+    assert(list.isNotEmpty, 'Refined Key/Value collection can\'t be empty');
 
     if (keysCaseInsensitive) {
       list.sort((e1, e2) => e1.keyLowerCase.compareTo(e2.keyLowerCase));
@@ -123,17 +123,19 @@ abstract class IkvPackBase {
     return list;
   }
 
-  List<_Triple> _fixeKeys(Iterable<_Triple> entries) {
+  List<_Triple> _fixKeysAndValues(Iterable<_Triple> entries) {
     var fixed = <_Triple>[];
 
     for (var e in entries) {
-      var s = e.key;
-      s = s.replaceAll('\n', '');
-      s = s.replaceAll('\r', '');
+      if (e.value.isNotEmpty) {
+        var s = e.key;
+        s = s.replaceAll('\n', '');
+        s = s.replaceAll('\r', '');
 
-      if (s.isNotEmpty) {
-        if (s.length > 255) s = s.substring(0, 255);
-        fixed.add(_Triple(s, e.value));
+        if (s.isNotEmpty) {
+          if (s.length > 255) s = s.substring(0, 255);
+          fixed.add(_Triple(s, e.value));
+        }
       }
     }
 
@@ -212,6 +214,10 @@ abstract class IkvPackBase {
 
     return -1;
   }
+
+  @pragma('vm:prefer-inline')
+  @pragma('dart2js:tryInline')
+  bool containsKey(String key) => indexOf(key) > -1;
 
   @pragma('vm:prefer-inline')
   @pragma('dart2js:tryInline')
