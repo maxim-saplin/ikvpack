@@ -1,53 +1,16 @@
 import 'dart:collection';
 import 'dart:convert';
 import 'package:archive/archive.dart';
+import 'storage_vm.dart'
+    if (dart.library.io) 'storage_vm.dart'
+    if (dart.library.html) 'storage_web.dart';
 
-class _KeyBasket {
-  final String firstLetter;
-  final int startIndex;
-  final int endIndex;
+class IkvPack {
+  final Storage? _storage;
 
-  _KeyBasket(this.firstLetter, this.startIndex, this.endIndex);
-}
-
-class _Triple {
-  final String key;
-  final String keyLowerCase;
-  final String value;
-
-  // Out of order Cyrylic chars
-  // я - 1103
-  //
-  // е - 1077 (й 1078)
-  // ё - 1105  <---
-  //
-  // з - 1079 (и 1080)
-  // і - 1110  <---
-  //
-  // у - 1091
-  // ў - 1118  <---
-  // ѝ/1117, ќ/1116, ћ/1115, њ/1114, љ/1113, ј/1112, ї/1111, і/1110, ѕ/1109,
-  // є/1108, ѓ/1107, ђ/1106, ё/1105, ѐ/1104
-  // http://www.ltg.ed.ac.uk/~richard/utf-8.cgi?input=1103&mode=decimal
-
-  // Belarusian alphabet
-  // АаБбВвГгДдЕеЁёЖжЗзІіЙйКкЛлМмНнОоПпРрСсТтУуЎўФфХхЦцЧчШшЫыЬьЭэЮюЯя
-  // АБВГДЕЁЖЗІЙКЛМНОПРСТУЎФХЦЧШЫЬЭЮЯ
-  // абвгдеёжзійклмнопрстуўфхцчшыьэюя
-  static String _fixOutOfOrder(String value) {
-    value =
-        value.replaceAll('ё', 'е').replaceAll('і', 'и').replaceAll('ў', 'у');
-    return value;
-  }
-
-  _Triple(this.key, this.value)
-      : keyLowerCase = _fixOutOfOrder(key.toLowerCase());
-
-  _Triple.noLowerCase(this.key, this.value) : keyLowerCase = '';
-}
-
-abstract class IkvPackBase {
-  IkvPackBase(String path, this.keysCaseInsensitive) : _valuesInMemory = false;
+  IkvPack(String path, this.keysCaseInsensitive)
+      : _valuesInMemory = false,
+        _storage = Storage(path);
 
   /// Do not do strcit comparisons by ignoring case.
   /// Make lowercase shadow version of keys and uses those for lookups.
@@ -70,7 +33,7 @@ abstract class IkvPackBase {
   UnmodifiableListView<List<int>> get valuesBytes => _valuesBytes;
 
   /// Web implementation does not support indexed keys
-  bool get indexedKeys;
+  //bool get indexedKeys => true;
 
   final bool _valuesInMemory;
 
@@ -79,8 +42,9 @@ abstract class IkvPackBase {
   bool get valuesInMemory => _valuesInMemory;
 
   /// String values are compressed via Zlib
-  IkvPackBase.fromMap(Map<String, String> map, this.keysCaseInsensitive)
-      : _valuesInMemory = true {
+  IkvPack.fromMap(Map<String, String> map, [this.keysCaseInsensitive = true])
+      : _valuesInMemory = true,
+        _storage = null {
     var entries = _getSortedEntries(map);
 
     var enc = ZLibEncoder();
@@ -171,16 +135,37 @@ abstract class IkvPackBase {
     _keyBaskets.add(_KeyBasket(firstLetter, index, list.length - 1));
   }
 
-  void packToFile(String path);
+  void packToFile(String path) {}
 
   int get length => _keysList.length;
 
   @pragma('vm:prefer-inline')
   @pragma('dart2js:tryInline')
   String valueAt(int index) {
-    var bytes = decoder.decodeBytes(_values[index]);
+    var bytes = valuesInMemory
+        ? decoder.decodeBytes(_values[index])
+        : decoder.decodeBytes((_storage as Storage).valueAt(index));
     var value = utf8.decode(bytes, allowMalformed: true);
     return value;
+  }
+
+  @pragma('vm:prefer-inline')
+  @pragma('dart2js:tryInline')
+  String value(String key) {
+    var index = indexOf(key);
+    if (index < 0) throw 'key not foiund';
+
+    return _storage != null && !(_storage as Storage).useIndexToGetValue
+        ? utf8.decode(decoder.decodeBytes((_storage as Storage).value(key)),
+            allowMalformed: true)
+        : valueAt(index);
+  }
+
+  /// Returns decompressed value
+  @pragma('vm:prefer-inline')
+  @pragma('dart2js:tryInline')
+  String operator [](String key) {
+    return value(key);
   }
 
   /// -1 if not found
@@ -223,22 +208,6 @@ abstract class IkvPackBase {
   @pragma('dart2js:tryInline')
   bool containsKey(String key) => indexOf(key) > -1;
 
-  @pragma('vm:prefer-inline')
-  @pragma('dart2js:tryInline')
-  String value(String key) {
-    var index = indexOf(key);
-    if (index < 0) throw 'key not foiund';
-
-    return valueAt(index);
-  }
-
-  /// Returns decompressed value
-  @pragma('vm:prefer-inline')
-  @pragma('dart2js:tryInline')
-  String operator [](String key) {
-    return value(key);
-  }
-
   List<String> keysStartingWith(String value, [int maxResult = 100]) {
     var keys = <String>[];
     var list = _keysList;
@@ -263,4 +232,65 @@ abstract class IkvPackBase {
     }
     return keys;
   }
+}
+
+// class KeysAndValues {
+//   final List<String> keys;
+//   final List<List<int>> values;
+
+//   KeysAndValues(this.keys, this.values);
+// }
+
+abstract class StorageBase {
+  StorageBase(String path);
+
+  List<String> readSortedKeys();
+  List<int> value(String key);
+  List<int> valueAt(int index);
+  void dispose();
+  bool get useIndexToGetValue;
+}
+
+class _KeyBasket {
+  final String firstLetter;
+  final int startIndex;
+  final int endIndex;
+
+  _KeyBasket(this.firstLetter, this.startIndex, this.endIndex);
+}
+
+class _Triple {
+  final String key;
+  final String keyLowerCase;
+  final String value;
+
+  // Out of order Cyrylic chars
+  // я - 1103
+  //
+  // е - 1077 (й 1078)
+  // ё - 1105  <---
+  //
+  // з - 1079 (и 1080)
+  // і - 1110  <---
+  //
+  // у - 1091
+  // ў - 1118  <---
+  // ѝ/1117, ќ/1116, ћ/1115, њ/1114, љ/1113, ј/1112, ї/1111, і/1110, ѕ/1109,
+  // є/1108, ѓ/1107, ђ/1106, ё/1105, ѐ/1104
+  // http://www.ltg.ed.ac.uk/~richard/utf-8.cgi?input=1103&mode=decimal
+
+  // Belarusian alphabet
+  // АаБбВвГгДдЕеЁёЖжЗзІіЙйКкЛлМмНнОоПпРрСсТтУуЎўФфХхЦцЧчШшЫыЬьЭэЮюЯя
+  // АБВГДЕЁЖЗІЙКЛМНОПРСТУЎФХЦЧШЫЬЭЮЯ
+  // абвгдеёжзійклмнопрстуўфхцчшыьэюя
+  static String _fixOutOfOrder(String value) {
+    value =
+        value.replaceAll('ё', 'е').replaceAll('і', 'и').replaceAll('ў', 'у');
+    return value;
+  }
+
+  _Triple(this.key, this.value)
+      : keyLowerCase = _fixOutOfOrder(key.toLowerCase());
+
+  _Triple.noLowerCase(this.key, this.value) : keyLowerCase = '';
 }

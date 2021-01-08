@@ -78,14 +78,14 @@ void runCaseInsensitiveTests(IkvPack ikv) {
 
 void runInMemoryRelatedTests(IkvPack ikv) {
   test('fromMap() constructor property inits object', () {
-    expect(ikv.indexedKeys, true);
+    //expect(ikv.indexedKeys, true);
     expect(ikv.valuesInMemory, true);
   });
 }
 
 void runFileRelatedTests(IkvPack ikv) {
   test('Default constructore properky inits object', () {
-    expect(ikv.indexedKeys, true);
+    //expect(ikv.indexedKeys, true);
     expect(ikv.valuesInMemory, false);
   });
 }
@@ -94,17 +94,17 @@ void main() {
   group('Corner cases', () {
     test('Passing empty Map throws AssertionError', () {
       var m = <String, String>{};
-      expect(() => IkvPack.fromStringMap(m), throwsA(isA<AssertionError>()));
+      expect(() => IkvPack.fromMap(m), throwsA(isA<AssertionError>()));
     });
 
     test('Passing empty Key throws AssertionError', () {
       var m = <String, String>{'': 'sdsd'};
-      expect(() => IkvPack.fromStringMap(m), throwsA(isA<AssertionError>()));
+      expect(() => IkvPack.fromMap(m), throwsA(isA<AssertionError>()));
     });
 
     test('Passing empty Value throws AssertionError', () {
       var m = <String, String>{'ss': ''};
-      expect(() => IkvPack.fromStringMap(m), throwsA(isA<AssertionError>()));
+      expect(() => IkvPack.fromMap(m), throwsA(isA<AssertionError>()));
     });
 
     test('Empty Keys are deleted', () {
@@ -114,7 +114,7 @@ void main() {
         '\n\r': 'sdsd',
         'sdss': 'd'
       };
-      var ik = IkvPack.fromStringMap(m);
+      var ik = IkvPack.fromMap(m);
       expect(ik.length, 2);
       expect(ik.containsKey('wew'), true);
       expect(ik.containsKey('sdss'), true);
@@ -122,7 +122,7 @@ void main() {
 
     test('Empty Values are deleted', () {
       var m = <String, String>{'': '', 'wew': 'dsdsd', 'sss': '', 'sdss': 'd'};
-      var ik = IkvPack.fromStringMap(m);
+      var ik = IkvPack.fromMap(m);
       expect(ik.length, 2);
       expect(ik['wew'], 'dsdsd');
       expect(ik['sdss'], 'd');
@@ -136,7 +136,7 @@ void main() {
         'sas\ndfsd': 'sdfs',
         'x' * 256: 'adsa'
       };
-      var ik = IkvPack.fromStringMap(m);
+      var ik = IkvPack.fromMap(m);
       expect(ik.length, 2);
       expect(ik.keys[0], 'sasdfsd');
       expect(ik.keys[1].length, 255);
@@ -144,7 +144,7 @@ void main() {
 
     test('Single item key baskets)', () {
       var m = <String, String>{'a': 'aaa', 'b': 'bbb', 'c': 'ccc'};
-      var ik = IkvPack.fromStringMap(m);
+      var ik = IkvPack.fromMap(m);
       expect(ik.length, 3);
       expect(ik['a'], 'aaa');
       expect(ik['b'], 'bbb');
@@ -152,27 +152,27 @@ void main() {
     });
   });
   group('In-memory tests, case-insensitive', () {
-    _ikv = IkvPack.fromStringMap(testMap, true);
+    _ikv = IkvPack.fromMap(testMap, true);
     runCommonTests(_ikv as IkvPack);
     runCaseInsensitiveTests(_ikv as IkvPack);
     runInMemoryRelatedTests(_ikv as IkvPack);
   });
 
   group('File tests, case-insensitive', () {
-    _ikv = IkvPack.fromStringMap(testMap, true);
+    _ikv = IkvPack.fromMap(testMap, true);
 
     runCommonTests(_ikv as IkvPack);
     runCaseInsensitiveTests(_ikv as IkvPack);
   });
 
   group('In-memory tests, case-sensitive', () {
-    _ikv = IkvPack.fromStringMap(testMap, false);
+    _ikv = IkvPack.fromMap(testMap, false);
     runCommonTests(_ikv as IkvPack);
     runInMemoryRelatedTests(_ikv as IkvPack);
   });
 
   group('File tests, case-sensitive', () {
-    _ikv = IkvPack.fromStringMap(testMap, false);
+    _ikv = IkvPack.fromMap(testMap, false);
 
     runCommonTests(_ikv as IkvPack);
   });

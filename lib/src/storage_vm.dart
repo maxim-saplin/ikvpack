@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'ikvpack_base.dart';
+import 'ikvpack.dart';
 
 /// File layout
 ///
@@ -26,12 +26,22 @@ import 'ikvpack_base.dart';
 /// - [Values] section
 ///   - Stream of bytes where beginning and end of certain value bytes is determind
 ///     by [Value offsets section]
-class IkvPack extends IkvPackBase {
-  IkvPack(String path, [keysCaseInsensitive = true])
-      : _file = File(path).openSync(),
-        super(path, keysCaseInsensitive) {
-    // var f = File(path);
-    // var raf = f.openSync();
+class Storage implements StorageBase {
+  Storage(this.path) : _file = File(path).openSync();
+
+  RandomAccessFile? _file;
+  bool _disposed = false;
+
+  @override
+  void dispose() {
+    _file?.closeSync();
+    _disposed = true;
+  }
+
+  final String path;
+
+  @override
+  List<String> readSortedKeys() {
     if (_file == null) throw 'Error opening file ${path}';
     var f = _file as RandomAccessFile;
     f.setPositionSync(4); // skip reserved
@@ -44,18 +54,13 @@ class IkvPack extends IkvPackBase {
       throw 'Invalid file, number of ofset entires doesn\'t match the lrngth';
     }
 
-    //_file.readByteSync()
+    return keys;
   }
 
-  IkvPack.fromStringMap(Map<String, String> map, [keysCaseInsensitive = true])
-      : super.fromMap(map, keysCaseInsensitive);
-
-  RandomAccessFile? _file;
-  bool _disposed = false;
-
-  void dispose() {
-    _file?.closeSync();
-    _disposed = true;
+  /// File storage only supports referencing values by index
+  @override
+  List<int> value(String key) {
+    throw UnimplementedError();
   }
 
   int _readInt32(RandomAccessFile raf) {
@@ -67,53 +72,57 @@ class IkvPack extends IkvPackBase {
   }
 
   @override
-  // TODO: implement indexedKeys
-  bool get indexedKeys => true;
+  // TODO: implement useIndexToGetValue
+  bool get useIndexToGetValue => true;
 
+  @override
+  List<int> valueAt(int index) {
+    return <int>[];
+  }
+}
+
+void saveToPath(String path, List<String> keys, List<List<int>> values) {
   void _writeInt32(RandomAccessFile raf, int value) {
     var bd = ByteData(4);
     bd.setInt32(0, value);
     raf.writeFromSync(bd.buffer.asUint8List());
   }
 
-  @override
-  void packToFile(String path) {
-    var raf = File(path).openSync(mode: FileMode.write);
-    try {
-      raf.setPositionSync(4); //skip reserved
-      _writeInt32(raf, length);
-      raf.setPositionSync(8); //skip offsets and values headers
-      for (var k in keys) {
-        var line = utf8.encode(k + '\n');
-        raf.writeFromSync(line);
-      }
-      // write offsets posisition
-      var offsetsOffset = raf.positionSync();
-      raf.setPosition(8);
-      _writeInt32(raf, offsetsOffset);
-
-      // move to values section start
-      var valuesOffset = offsetsOffset + 8 * length;
-      _writeInt32(raf, valuesOffset); // write values posisition
-      raf.setPosition(valuesOffset);
-      var offsets = <_OffsetLength>[];
-
-      for (var v in valuesBytes) {
-        var ol = _OffsetLength(valuesOffset, v.length);
-        valuesOffset += v.length;
-        offsets.add(ol);
-        raf.writeFromSync(v);
-      }
-
-      // write offsets
-      raf.setPosition(offsetsOffset);
-      for (var ol in offsets) {
-        _writeInt32(raf, ol.offset);
-        _writeInt32(raf, ol.length);
-      }
-    } finally {
-      raf.closeSync();
+  var raf = File(path).openSync(mode: FileMode.write);
+  try {
+    raf.setPositionSync(4); //skip reserved
+    _writeInt32(raf, keys.length);
+    raf.setPositionSync(8); //skip offsets and values headers
+    for (var k in keys) {
+      var line = utf8.encode(k + '\n');
+      raf.writeFromSync(line);
     }
+    // write offsets posisition
+    var offsetsOffset = raf.positionSync();
+    raf.setPosition(8);
+    _writeInt32(raf, offsetsOffset);
+
+    // move to values section start
+    var valuesOffset = offsetsOffset + 8 * keys.length;
+    _writeInt32(raf, valuesOffset); // write values posisition
+    raf.setPosition(valuesOffset);
+    var offsets = <_OffsetLength>[];
+
+    for (var v in values) {
+      var ol = _OffsetLength(valuesOffset, v.length);
+      valuesOffset += v.length;
+      offsets.add(ol);
+      raf.writeFromSync(v);
+    }
+
+    // write offsets
+    raf.setPosition(offsetsOffset);
+    for (var ol in offsets) {
+      _writeInt32(raf, ol.offset);
+      _writeInt32(raf, ol.length);
+    }
+  } finally {
+    raf.closeSync();
   }
 }
 
