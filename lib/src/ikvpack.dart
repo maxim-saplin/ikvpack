@@ -8,9 +8,19 @@ import 'storage_vm.dart'
 class IkvPack {
   final Storage? _storage;
 
-  IkvPack(String path, this.keysCaseInsensitive)
+  IkvPack(String path, [this.keysCaseInsensitive = true])
       : _valuesInMemory = false,
-        _storage = Storage(path);
+        _storage = Storage(path) {
+    _keysList = (_storage as Storage).readSortedKeys();
+    if (keysCaseInsensitive) {
+      _keysLowerCase = List.generate(_keysList.length,
+          (i) => _Triple._fixOutOfOrder(_keysList[i].toLowerCase()),
+          growable: false);
+    }
+    _keysReadOnly = UnmodifiableListView<String>(_keysList);
+
+    _buildBaskets();
+  }
 
   /// Do not do strcit comparisons by ignoring case.
   /// Make lowercase shadow version of keys and uses those for lookups.
@@ -27,10 +37,6 @@ class IkvPack {
 
   UnmodifiableListView<String> _keysReadOnly = UnmodifiableListView<String>([]);
   UnmodifiableListView<String> get keys => _keysReadOnly;
-  UnmodifiableListView<List<int>> _valuesBytes =
-      UnmodifiableListView<List<int>>([]);
-
-  UnmodifiableListView<List<int>> get valuesBytes => _valuesBytes;
 
   /// Web implementation does not support indexed keys
   //bool get indexedKeys => true;
@@ -63,7 +69,6 @@ class IkvPack {
     }, growable: false);
 
     _keysReadOnly = UnmodifiableListView<String>(_keysList);
-    _valuesBytes = UnmodifiableListView<List<int>>(_valuesBytes);
     _buildBaskets();
   }
 
@@ -135,7 +140,10 @@ class IkvPack {
     _keyBaskets.add(_KeyBasket(firstLetter, index, list.length - 1));
   }
 
-  void packToFile(String path) {}
+  /// Serilized object to given file on VM and IndexedDB in Web
+  void saveTo(String path) {
+    saveToPath(path, _keysList, _values);
+  }
 
   int get length => _keysList.length;
 

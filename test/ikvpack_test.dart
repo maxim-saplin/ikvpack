@@ -159,7 +159,10 @@ void main() {
   });
 
   group('File tests, case-insensitive', () {
-    _ikv = IkvPack.fromMap(testMap, true);
+    // _ikv = IkvPack.fromMap(testMap, true);
+    // (_ikv as IkvPack).saveTo('testIkv.dat');
+
+    _ikv = IkvPack('test/testIkv.dat', true);
 
     runCommonTests(_ikv as IkvPack);
     runCaseInsensitiveTests(_ikv as IkvPack);
@@ -172,7 +175,7 @@ void main() {
   });
 
   group('File tests, case-sensitive', () {
-    _ikv = IkvPack.fromMap(testMap, false);
+    _ikv = IkvPack('test/testIkv.dat', false);
 
     runCommonTests(_ikv as IkvPack);
   });

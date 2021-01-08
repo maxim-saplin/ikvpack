@@ -29,12 +29,13 @@ import 'ikvpack.dart';
 class Storage implements StorageBase {
   Storage(this.path) : _file = File(path).openSync();
 
-  RandomAccessFile? _file;
+  final RandomAccessFile _file;
   bool _disposed = false;
+  final List<_OffsetLength> _offsets = <_OffsetLength>[];
 
   @override
   void dispose() {
-    _file?.closeSync();
+    _file.closeSync();
     _disposed = true;
   }
 
@@ -42,16 +43,45 @@ class Storage implements StorageBase {
 
   @override
   List<String> readSortedKeys() {
-    if (_file == null) throw 'Error opening file ${path}';
-    var f = _file as RandomAccessFile;
-    f.setPositionSync(4); // skip reserved
-    var length = _readInt32(f);
-    var offsetsOffset = _readInt32(f);
-    var valuesOffset = _readInt32(f);
+    if (_disposed) throw 'Storage object was disposed, cant use it';
+    _file.setPositionSync(4); // skip reserved
+    var length = _readInt32(_file);
+    var offsetsOffset = _readInt32(_file);
+    var valuesOffset = _readInt32(_file);
     var keys = <String>[];
 
     if (valuesOffset - offsetsOffset != length * 8) {
-      throw 'Invalid file, number of ofset entires doesn\'t match the lrngth';
+      throw 'Invalid file, number of ofset entires doesn\'t match the length';
+    }
+
+    if (_file.lengthSync() <= offsetsOffset) {
+      throw 'Invalid file, file to short (offsetsOffset)';
+    }
+
+    if (_file.lengthSync() <= valuesOffset) {
+      throw 'Invalid file, file to short (valuesOffset)';
+    }
+
+    // reading keys
+    var bytes = <int>[];
+    for (var i = _file.positionSync(); i < offsetsOffset; i++) {
+      var b = _file.readByteSync();
+      if (b == 10) {
+        var key = utf8.decode(bytes);
+        keys.add(key);
+        bytes.clear();
+      } else {
+        bytes.add(b);
+      }
+    }
+    if (keys.length != length) {
+      throw 'Invalid file, number of keys read doesnt match number in headers';
+    }
+
+    // reading value offsets
+    for (var i = 0; i < length; i++) {
+      var o = _OffsetLength(_readInt32(_file), _readInt32(_file));
+      _offsets.add(o);
     }
 
     return keys;
@@ -77,7 +107,10 @@ class Storage implements StorageBase {
 
   @override
   List<int> valueAt(int index) {
-    return <int>[];
+    var o = _offsets[index];
+    _file.setPositionSync(o.offset);
+    var value = _file.readSync(o.length);
+    return value.toList(growable: false);
   }
 }
 
@@ -92,20 +125,20 @@ void saveToPath(String path, List<String> keys, List<List<int>> values) {
   try {
     raf.setPositionSync(4); //skip reserved
     _writeInt32(raf, keys.length);
-    raf.setPositionSync(8); //skip offsets and values headers
+    raf.setPositionSync(16); //skip offsets and values headers
     for (var k in keys) {
       var line = utf8.encode(k + '\n');
       raf.writeFromSync(line);
     }
     // write offsets posisition
     var offsetsOffset = raf.positionSync();
-    raf.setPosition(8);
+    raf.setPositionSync(8);
     _writeInt32(raf, offsetsOffset);
 
     // move to values section start
     var valuesOffset = offsetsOffset + 8 * keys.length;
     _writeInt32(raf, valuesOffset); // write values posisition
-    raf.setPosition(valuesOffset);
+    raf.setPositionSync(valuesOffset);
     var offsets = <_OffsetLength>[];
 
     for (var v in values) {
@@ -116,10 +149,15 @@ void saveToPath(String path, List<String> keys, List<List<int>> values) {
     }
 
     // write offsets
-    raf.setPosition(offsetsOffset);
+    raf.setPositionSync(offsetsOffset);
     for (var ol in offsets) {
       _writeInt32(raf, ol.offset);
       _writeInt32(raf, ol.length);
+    }
+
+    //  write values
+    for (var v in values) {
+      raf.writeFromSync(v);
     }
   } finally {
     raf.closeSync();
