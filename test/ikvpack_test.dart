@@ -33,6 +33,11 @@ void runCommonTests(IkvPack ikv) {
     var keys = ikv.keysStartingWith('aerosol', 3);
     expect(keys[0], 'aerosol bomb');
   });
+
+  test('Key in keysStartingWith() is trimmed', () {
+    var keys = ikv.keysStartingWith(' Acer ', 1);
+    expect(keys.length, 1);
+  });
 }
 
 void runCaseInsensitiveTests(IkvPack ikv) {
@@ -60,9 +65,14 @@ void runCaseInsensitiveTests(IkvPack ikv) {
     expect(keys.length, 3);
   });
 
-  test('Key keysStartingWith() conducts case- insensitive search', () {
+  test('Key keysStartingWith() conducts case-insensitive search', () {
     var keys = ikv.keysStartingWith('ЗЬ');
     expect(keys.length, 6);
+  });
+
+  test('"и" and "i" subsitute wroks when looking up Belarusian words', () {
+    var keys = ikv.keysStartingWith('ихтыёл');
+    expect(keys.length, 1);
   });
 }
 

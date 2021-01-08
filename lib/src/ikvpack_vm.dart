@@ -27,16 +27,36 @@ import 'ikvpack_base.dart';
 ///   - Stream of bytes where beginning and end of certain value bytes is determind
 ///     by [Value offsets section]
 class IkvPack extends IkvPackBase {
-  IkvPack(String path) : super(path) {
-    var f = File(path);
-    var raf = f.openSync();
-    raf.setPositionSync(4); // skip reserved
-    var length = _readInt32(raf);
+  IkvPack(String path, [keysCaseInsensitive = true])
+      : _file = File(path).openSync(),
+        super(path, keysCaseInsensitive) {
+    // var f = File(path);
+    // var raf = f.openSync();
+    if (_file == null) throw 'Error opening file ${path}';
+    var f = _file as RandomAccessFile;
+    f.setPositionSync(4); // skip reserved
+    var length = _readInt32(f);
+    var offsetsOffset = _readInt32(f);
+    var valuesOffset = _readInt32(f);
+    var keys = <String>[];
+
+    if (valuesOffset - offsetsOffset != length * 8) {
+      throw 'Invalid file, number of ofset entires doesn\'t match the lrngth';
+    }
+
+    //_file.readByteSync()
   }
 
-  IkvPack.fromStringMap(Map<String, String> map,
-      [bool keysCaseInsensitive = true])
+  IkvPack.fromStringMap(Map<String, String> map, [keysCaseInsensitive = true])
       : super.fromMap(map, keysCaseInsensitive);
+
+  RandomAccessFile? _file;
+  bool _disposed = false;
+
+  void dispose() {
+    _file?.closeSync();
+    _disposed = true;
+  }
 
   int _readInt32(RandomAccessFile raf) {
     var int32 = Uint8List(4);

@@ -47,7 +47,7 @@ class _Triple {
 }
 
 abstract class IkvPackBase {
-  IkvPackBase(String path) : _valuesInMemory = false;
+  IkvPackBase(String path, this.keysCaseInsensitive) : _valuesInMemory = false;
 
   /// Do not do strcit comparisons by ignoring case.
   /// Make lowercase shadow version of keys and uses those for lookups.
@@ -79,8 +79,7 @@ abstract class IkvPackBase {
   bool get valuesInMemory => _valuesInMemory;
 
   /// String values are compressed via Zlib
-  IkvPackBase.fromMap(Map<String, String> map,
-      [this.keysCaseInsensitive = true])
+  IkvPackBase.fromMap(Map<String, String> map, this.keysCaseInsensitive)
       : _valuesInMemory = true {
     var entries = _getSortedEntries(map);
 
@@ -243,9 +242,12 @@ abstract class IkvPackBase {
   List<String> keysStartingWith(String value, [int maxResult = 100]) {
     var keys = <String>[];
     var list = _keysList;
+    value = value.trim();
 
     if (keysCaseInsensitive) {
       value = value.toLowerCase();
+      value = _Triple._fixOutOfOrder(
+          value); // TODO, add test 'имгненне' finds 'iмгненне', bug which becomes feature (allow searching BY words with RU substitues)
       list = _keysLowerCase;
     }
 
