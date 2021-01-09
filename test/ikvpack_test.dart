@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:ikvpack/ikvpack.dart';
 import 'package:test/test.dart';
 
@@ -175,9 +177,40 @@ void main() {
   });
 
   group('File tests, case-sensitive', () {
+    setUpAll(() {
+      try {
+        Directory('tmp').deleteSync(recursive: true);
+      } catch (_) {}
+      Directory('tmp').createSync();
+    });
+
+    tearDownAll(() {
+      try {
+        Directory('tmp').deleteSync(recursive: true);
+      } catch (_) {}
+    });
+
     _ikv = IkvPack('test/testIkv.dat', false);
 
     runCommonTests(_ikv as IkvPack);
+
+    test('Same data is read back', () {
+      var m = <String, String>{'a': 'aaa', 'b': 'bbb', 'c': 'ccc'};
+      var ik = IkvPack.fromMap(m);
+
+      expect(ik.length, 3);
+      expect(ik['a'], 'aaa');
+      expect(ik['b'], 'bbb');
+      expect(ik['c'], 'ccc');
+
+      ik.saveTo('tmp/test.dat');
+      ik = IkvPack('tmp/test.dat');
+
+      expect(ik.length, 3);
+      expect(ik['a'], 'aaa');
+      expect(ik['b'], 'bbb');
+      expect(ik['c'], 'ccc');
+    });
   });
 }
 
