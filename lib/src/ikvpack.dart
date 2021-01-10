@@ -14,7 +14,7 @@ class IkvPack {
   IkvPack(String path, [this.keysCaseInsensitive = true])
       : _valuesInMemory = false,
         _storage = Storage(path) {
-    _keysList = (_storage as Storage).readSortedKeys();
+    _keysList = _storage!.readSortedKeys();
     if (keysCaseInsensitive) {
       _keysLowerCase = List.generate(_keysList.length,
           (i) => _Triple._fixOutOfOrder(_keysList[i].toLowerCase()),
@@ -48,6 +48,12 @@ class IkvPack {
     });
 
     return completer.future;
+  }
+
+  //TODO, add test
+  /// Deletes file on disk or related IndexedDB in Web
+  static void delete(String path) {
+    deleteFromPath(path);
   }
 
   /// Do not do strcit comparisons by ignoring case.
@@ -180,7 +186,7 @@ class IkvPack {
   String valueAt(int index) {
     var bytes = valuesInMemory
         ? decoder.decodeBytes(_values[index])
-        : decoder.decodeBytes((_storage as Storage).valueAt(index));
+        : decoder.decodeBytes(_storage!.valueAt(index));
     var value = utf8.decode(bytes, allowMalformed: true);
     return value;
   }
@@ -188,8 +194,7 @@ class IkvPack {
   @pragma('vm:prefer-inline')
   @pragma('dart2js:tryInline')
   Uint8List valueRawCompressedAt(int index) {
-    var value =
-        valuesInMemory ? _values[index] : (_storage as Storage).valueAt(index);
+    var value = valuesInMemory ? _values[index] : _storage!.valueAt(index);
 
     return Uint8List.fromList(value);
   }
@@ -200,8 +205,8 @@ class IkvPack {
     var index = indexOf(key);
     if (index < 0) throw 'key not foiund';
 
-    return _storage != null && !(_storage as Storage).useIndexToGetValue
-        ? utf8.decode(decoder.decodeBytes((_storage as Storage).value(key)),
+    return _storage != null && !_storage!.useIndexToGetValue
+        ? utf8.decode(decoder.decodeBytes(_storage!.value(key)),
             allowMalformed: true)
         : valueAt(index);
   }
@@ -212,8 +217,8 @@ class IkvPack {
     var index = indexOf(key);
     if (index < 0) throw 'key not foiund';
 
-    return _storage != null && !(_storage as Storage).useIndexToGetValue
-        ? Uint8List.fromList((_storage as Storage).value(key))
+    return _storage != null && !_storage!.useIndexToGetValue
+        ? Uint8List.fromList(_storage!.value(key))
         : valueRawCompressedAt(index);
   }
 
@@ -292,6 +297,11 @@ class IkvPack {
   void dispose() {
     _storage?.dispose();
   }
+
+  int get sizeBytes {
+    if (valuesInMemory || _storage == null) return -1;
+    return _storage!.sizeBytes;
+  }
 }
 
 abstract class StorageBase {
@@ -300,6 +310,7 @@ abstract class StorageBase {
   List<String> readSortedKeys();
   List<int> value(String key);
   List<int> valueAt(int index);
+  int get sizeBytes;
   void dispose();
   bool get useIndexToGetValue;
   // the bellow 2 methods are workarounds for passing Storage across isolates,

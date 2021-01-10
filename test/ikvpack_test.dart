@@ -155,25 +155,43 @@ void main() {
   });
   group('In-memory tests, case-insensitive', () {
     _ikv = IkvPack.fromMap(testMap, true);
-    runCommonTests(_ikv as IkvPack);
-    runCaseInsensitiveTests(_ikv as IkvPack);
-    runInMemoryRelatedTests(_ikv as IkvPack);
+    runCommonTests(_ikv!);
+    runCaseInsensitiveTests(_ikv!);
+    runInMemoryRelatedTests(_ikv!);
   });
 
   group('In-memory tests, case-sensitive', () {
     _ikv = IkvPack.fromMap(testMap, false);
-    runCommonTests(_ikv as IkvPack);
-    runInMemoryRelatedTests(_ikv as IkvPack);
+    runCommonTests(_ikv!);
+    runInMemoryRelatedTests(_ikv!);
   });
 
   group('File tests, case-insensitive', () {
     // _ikv = IkvPack.fromMap(testMap, true);
-    // (_ikv as IkvPack).saveTo('testIkv.dat');
+    // (_ikv!).saveTo('testIkv.dat');
 
     _ikv = IkvPack('test/testIkv.dat', true);
 
-    runCommonTests(_ikv as IkvPack);
-    runCaseInsensitiveTests(_ikv as IkvPack);
+    runCommonTests(_ikv!);
+    runCaseInsensitiveTests(_ikv!);
+
+    test('Files size is properly returned', () {
+      expect(_ikv!.sizeBytes, 271259);
+    });
+
+    test('File can be deleted', () {
+      var m = <String, String>{'a': 'aaa', 'b': 'bbb', 'c': 'ccc'};
+      var ik = IkvPack.fromMap(m);
+
+      expect(ik.length, 3);
+
+      ik.saveTo('tmp/test2.dat');
+
+      expect(File('tmp/test2.dat').existsSync(), true);
+
+      IkvPack.delete('tmp/test2.dat');
+      expect(File('tmp/test2.dat').existsSync(), false);
+    });
 
     test('Same data is read back', () {
       var m = <String, String>{'a': 'aaa', 'b': 'bbb', 'c': 'ccc'};
@@ -232,7 +250,7 @@ void main() {
   group('File tests, case-sensitive', () {
     _ikv = IkvPack('test/testIkv.dat', false);
 
-    runCommonTests(_ikv as IkvPack);
+    runCommonTests(_ikv!);
   });
 }
 

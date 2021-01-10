@@ -142,6 +142,14 @@ class Storage implements StorageBase {
   void reopenFile() {
     _file = File(path).openSync();
   }
+
+  @override
+  // TODO: implement sizeBytes
+  int get sizeBytes => _file != null ? _file!.lengthSync() : -1;
+}
+
+void deleteFromPath(String path) {
+  File(path).deleteSync();
 }
 
 void saveToPath(String path, List<String> keys, List<List<int>> values) {
