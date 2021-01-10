@@ -1,5 +1,6 @@
 import 'dart:collection';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import 'storage_vm.dart'
     if (dart.library.io) 'storage_vm.dart'
@@ -159,6 +160,15 @@ class IkvPack {
 
   @pragma('vm:prefer-inline')
   @pragma('dart2js:tryInline')
+  Uint8List valueRawCompressedAt(int index) {
+    var value =
+        valuesInMemory ? _values[index] : (_storage as Storage).valueAt(index);
+
+    return Uint8List.fromList(value);
+  }
+
+  @pragma('vm:prefer-inline')
+  @pragma('dart2js:tryInline')
   String value(String key) {
     var index = indexOf(key);
     if (index < 0) throw 'key not foiund';
@@ -167,6 +177,17 @@ class IkvPack {
         ? utf8.decode(decoder.decodeBytes((_storage as Storage).value(key)),
             allowMalformed: true)
         : valueAt(index);
+  }
+
+  @pragma('vm:prefer-inline')
+  @pragma('dart2js:tryInline')
+  Uint8List valueRawCompressed(String key) {
+    var index = indexOf(key);
+    if (index < 0) throw 'key not foiund';
+
+    return _storage != null && !(_storage as Storage).useIndexToGetValue
+        ? Uint8List.fromList((_storage as Storage).value(key))
+        : valueRawCompressedAt(index);
   }
 
   /// Returns decompressed value
@@ -239,6 +260,10 @@ class IkvPack {
       }
     }
     return keys;
+  }
+
+  void dispose() {
+    _storage?.dispose();
   }
 }
 

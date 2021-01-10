@@ -13,7 +13,7 @@ void runCommonTests(IkvPack ikv) {
     expect(k, 'Aaron Burr');
   });
 
-  test('Can serach value by index', () {
+  test('Can get value by index', () {
     var v = ikv.valueAt(0);
     expect(
         v.startsWith(
@@ -26,9 +26,16 @@ void runCommonTests(IkvPack ikv) {
         true);
   });
 
-  test('Can serach value by key', () {
+  test('Can get value by key', () {
     var v = ikv['зараць'];
     expect(v, '<div>вспахать</div>');
+  });
+
+  test('Can get raw uncompressed value', () {
+    var v = ikv.valueRawCompressed('зараць');
+    expect(v.isNotEmpty, true);
+    v = ikv.valueRawCompressedAt(2);
+    expect(v.isNotEmpty, true);
   });
 
   test('Key keysStartingWith() finds the key', () {
@@ -82,13 +89,6 @@ void runInMemoryRelatedTests(IkvPack ikv) {
   test('fromMap() constructor property inits object', () {
     //expect(ikv.indexedKeys, true);
     expect(ikv.valuesInMemory, true);
-  });
-}
-
-void runFileRelatedTests(IkvPack ikv) {
-  test('Default constructore properky inits object', () {
-    //expect(ikv.indexedKeys, true);
-    expect(ikv.valuesInMemory, false);
   });
 }
 
@@ -210,6 +210,23 @@ void main() {
       expect(ik['a'], 'aaa');
       expect(ik['b'], 'bbb');
       expect(ik['c'], 'ccc');
+    });
+
+    test('Disposed ikv cant be used anymore', () {
+      var m = <String, String>{'a': 'aaa', 'b': 'bbb', 'c': 'ccc'};
+      var ik = IkvPack.fromMap(m);
+
+      expect(ik.length, 3);
+      expect(ik['a'], 'aaa');
+      expect(ik['b'], 'bbb');
+      expect(ik['c'], 'ccc');
+
+      ik.saveTo('tmp/test.dat');
+      ik = IkvPack('tmp/test.dat');
+      ik.dispose();
+
+      expect(ik.length, 3);
+      expect(() => ik['a'], throwsException);
     });
   });
 }

@@ -31,7 +31,7 @@ class Storage implements StorageBase {
 
   final RandomAccessFile _file;
   bool _disposed = false;
-  final List<_OffsetLength> _offsets = <_OffsetLength>[];
+  List<_OffsetLength> _offsets = <_OffsetLength>[];
 
   @override
   void dispose() {
@@ -43,12 +43,15 @@ class Storage implements StorageBase {
 
   @override
   List<String> readSortedKeys() {
+    // var sw = Stopwatch();
+    // sw.start();
+    // print('Reading ikvpack keys and value offsets...');
     if (_disposed) throw 'Storage object was disposed, cant use it';
     _file.setPositionSync(4); // skip reserved
     var length = _readInt32(_file);
     var offsetsOffset = _readInt32(_file);
     var valuesOffset = _readInt32(_file);
-    var keys = <String>[];
+    var keys = <String>[]..length;
 
     if (valuesOffset - offsetsOffset != length * 8) {
       throw 'Invalid file, number of ofset entires doesn\'t match the length';
@@ -62,27 +65,39 @@ class Storage implements StorageBase {
       throw 'Invalid file, file to short (valuesOffset)';
     }
 
+    // tried reading file byte after byte, very slow, OS doesnt seem to read ahead and cache future file bytes
+    var bytes = _file.readSync(offsetsOffset - _file.positionSync());
     // reading keys
-    var bytes = <int>[];
-    for (var i = _file.positionSync(); i < offsetsOffset; i++) {
-      var b = _file.readByteSync();
-      if (b == 10) {
-        var key = utf8.decode(bytes);
-        keys.add(key);
-        bytes.clear();
-      } else {
-        bytes.add(b);
+
+    var prev = 0;
+    var i = 0;
+    keys = List.generate(length, (index) {
+      while (i < bytes.length) {
+        if (bytes[i] == 10) {
+          var key = utf8.decode(Uint8List.view(bytes.buffer, prev, i - prev),
+              allowMalformed: true);
+          i++;
+          prev = i;
+
+          return key;
+        }
+        i++;
       }
-    }
+      throw 'Invalid file, number of keys read doesnt match number in headers';
+    });
+
     if (keys.length != length) {
       throw 'Invalid file, number of keys read doesnt match number in headers';
     }
 
+    //print('Keys read: ${sw.elapsedMilliseconds}ms');
+
     // reading value offsets
-    for (var i = 0; i < length; i++) {
-      var o = _OffsetLength(_readInt32(_file), _readInt32(_file));
-      _offsets.add(o);
-    }
+
+    var bd = _file.readSync(length * 8).buffer.asByteData();
+
+    _offsets = List.generate(length,
+        (i) => _OffsetLength(bd.getInt32(i * 8), bd.getInt32(i * 8 + 4)));
 
     return keys;
   }
