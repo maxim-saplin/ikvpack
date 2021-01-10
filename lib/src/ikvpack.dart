@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:isolate';
 import 'dart:typed_data';
-import 'package:archive/archive.dart';
+//import 'package:archive/archive.dart';
 import 'storage_vm.dart'
     if (dart.library.io) 'storage_vm.dart'
     if (dart.library.html) 'storage_web.dart';
@@ -14,7 +15,12 @@ class IkvPack {
   IkvPack(String path, [this.keysCaseInsensitive = true])
       : _valuesInMemory = false,
         _storage = Storage(path) {
-    _keysList = _storage!.readSortedKeys();
+    try {
+      _keysList = _storage!.readSortedKeys();
+    } catch (e) {
+      _storage?.dispose();
+      rethrow;
+    }
     if (keysCaseInsensitive) {
       _keysLowerCase = List.generate(_keysList.length,
           (i) => _Triple._fixOutOfOrder(_keysList[i].toLowerCase()),
@@ -67,7 +73,13 @@ class IkvPack {
   List<String> _keysLowerCase = [];
   final List<_KeyBasket> _keyBaskets = [];
   List<List<int>> _values = [];
-  final ZLibDecoder decoder = ZLibDecoder();
+  //final ZLibDecoder decoder = ZLibDecoder();
+
+  final ZLibCodec codec = ZLibCodec(
+      level: 7,
+      memLevel: ZLibOption.maxMemLevel,
+      raw: true,
+      strategy: ZLibOption.strategyDefault);
 
   UnmodifiableListView<String> _keysReadOnly = UnmodifiableListView<String>([]);
   UnmodifiableListView<String> get keys => _keysReadOnly;
@@ -87,7 +99,7 @@ class IkvPack {
         _storage = null {
     var entries = _getSortedEntries(map);
 
-    var enc = ZLibEncoder();
+    //var enc = ZLibEncoder();
 
     _keysList =
         List.generate(entries.length, (i) => entries[i].key, growable: false);
@@ -96,10 +108,20 @@ class IkvPack {
           entries.length, (i) => entries[i].keyLowerCase,
           growable: false);
     }
+
+    // var utfLength = 0;
+    // var zipLength = 0;
+
     _values = List.generate(entries.length, (i) {
       var utf = utf8.encode(entries[i].value);
-      var zip = enc.encode(utf);
+      var zip = codec.encoder.convert(utf);
+
+      //var zip = enc.encode(utf);
+      // utfLength += utf.length;
+      // zipLength += zip.length;
+      // print('${utfLength}/${zipLength}');
       return zip;
+      //return utf;
     }, growable: false);
 
     _keysReadOnly = UnmodifiableListView<String>(_keysList);
@@ -185,8 +207,8 @@ class IkvPack {
   @pragma('dart2js:tryInline')
   String valueAt(int index) {
     var bytes = valuesInMemory
-        ? decoder.decodeBytes(_values[index])
-        : decoder.decodeBytes(_storage!.valueAt(index));
+        ? codec.decoder.convert(_values[index])
+        : codec.decoder.convert(_storage!.valueAt(index));
     var value = utf8.decode(bytes, allowMalformed: true);
     return value;
   }
@@ -203,10 +225,10 @@ class IkvPack {
   @pragma('dart2js:tryInline')
   String value(String key) {
     var index = indexOf(key);
-    if (index < 0) throw 'key not foiund';
+    if (index < 0) return ''; //throw 'key not foiund';
 
     return _storage != null && !_storage!.useIndexToGetValue
-        ? utf8.decode(decoder.decodeBytes(_storage!.value(key)),
+        ? utf8.decode(codec.decoder.convert(_storage!.value(key)),
             allowMalformed: true)
         : valueAt(index);
   }
@@ -215,7 +237,7 @@ class IkvPack {
   @pragma('dart2js:tryInline')
   Uint8List valueRawCompressed(String key) {
     var index = indexOf(key);
-    if (index < 0) throw 'key not foiund';
+    if (index < 0) return Uint8List(0); //throw 'key not foiund';
 
     return _storage != null && !_storage!.useIndexToGetValue
         ? Uint8List.fromList(_storage!.value(key))

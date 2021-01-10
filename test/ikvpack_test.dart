@@ -47,6 +47,12 @@ void runCommonTests(IkvPack ikv) {
     var keys = ikv.keysStartingWith(' Acer ', 1);
     expect(keys.length, 1);
   });
+
+  test('Non existing keys return empty result', () {
+    expect(ikv.containsKey('wewer'), false);
+    expect(ikv['wewer'], '');
+    expect(ikv.valueRawCompressed('wewer').isEmpty, true);
+  });
 }
 
 void runCaseInsensitiveTests(IkvPack ikv) {
@@ -167,8 +173,8 @@ void main() {
   });
 
   group('File tests, case-insensitive', () {
-    // _ikv = IkvPack.fromMap(testMap, true);
-    // (_ikv!).saveTo('testIkv.dat');
+    _ikv = IkvPack.fromMap(testMap, true);
+    (_ikv!).saveTo('testIkv.dat');
 
     _ikv = IkvPack('test/testIkv.dat', true);
 
@@ -176,7 +182,7 @@ void main() {
     runCaseInsensitiveTests(_ikv!);
 
     test('Files size is properly returned', () {
-      expect(_ikv!.sizeBytes, 271259);
+      expect(_ikv!.sizeBytes, 262491);
     });
 
     test('File can be deleted', () {
