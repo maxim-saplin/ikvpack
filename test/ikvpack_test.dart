@@ -160,6 +160,12 @@ void main() {
     runInMemoryRelatedTests(_ikv as IkvPack);
   });
 
+  group('In-memory tests, case-sensitive', () {
+    _ikv = IkvPack.fromMap(testMap, false);
+    runCommonTests(_ikv as IkvPack);
+    runInMemoryRelatedTests(_ikv as IkvPack);
+  });
+
   group('File tests, case-insensitive', () {
     // _ikv = IkvPack.fromMap(testMap, true);
     // (_ikv as IkvPack).saveTo('testIkv.dat');
@@ -168,31 +174,6 @@ void main() {
 
     runCommonTests(_ikv as IkvPack);
     runCaseInsensitiveTests(_ikv as IkvPack);
-  });
-
-  group('In-memory tests, case-sensitive', () {
-    _ikv = IkvPack.fromMap(testMap, false);
-    runCommonTests(_ikv as IkvPack);
-    runInMemoryRelatedTests(_ikv as IkvPack);
-  });
-
-  group('File tests, case-sensitive', () {
-    setUpAll(() {
-      try {
-        Directory('tmp').deleteSync(recursive: true);
-      } catch (_) {}
-      Directory('tmp').createSync();
-    });
-
-    tearDownAll(() {
-      try {
-        Directory('tmp').deleteSync(recursive: true);
-      } catch (_) {}
-    });
-
-    _ikv = IkvPack('test/testIkv.dat', false);
-
-    runCommonTests(_ikv as IkvPack);
 
     test('Same data is read back', () {
       var m = <String, String>{'a': 'aaa', 'b': 'bbb', 'c': 'ccc'};
@@ -211,7 +192,6 @@ void main() {
       expect(ik['b'], 'bbb');
       expect(ik['c'], 'ccc');
     });
-
     test('Disposed ikv cant be used anymore', () {
       var m = <String, String>{'a': 'aaa', 'b': 'bbb', 'c': 'ccc'};
       var ik = IkvPack.fromMap(m);
@@ -228,6 +208,31 @@ void main() {
       expect(ik.length, 3);
       expect(() => ik['a'], throwsException);
     });
+
+    test('IkvPack can be loaded in isolate', () async {
+      var ik = await IkvPack.loadInIsolate('test/testIkv.dat', true);
+      var v = ik['зараць'];
+      expect(v, '<div>вспахать</div>');
+    });
+
+    setUpAll(() {
+      try {
+        Directory('tmp').deleteSync(recursive: true);
+      } catch (_) {}
+      Directory('tmp').createSync();
+    });
+
+    tearDownAll(() {
+      try {
+        Directory('tmp').deleteSync(recursive: true);
+      } catch (_) {}
+    });
+  });
+
+  group('File tests, case-sensitive', () {
+    _ikv = IkvPack('test/testIkv.dat', false);
+
+    runCommonTests(_ikv as IkvPack);
   });
 }
 

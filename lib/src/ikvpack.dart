@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
+import 'dart:isolate';
 import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import 'storage_vm.dart'
@@ -21,6 +23,31 @@ class IkvPack {
     _keysReadOnly = UnmodifiableListView<String>(_keysList);
 
     _buildBaskets();
+  }
+
+  static Future<IkvPack> loadInIsolate(String path,
+      [keysCaseInsensitive = true]) async {
+    var completer = Completer<IkvPack>();
+    var receivePort = ReceivePort();
+    var errorPort = ReceivePort();
+    var params = _IsolateParams(
+        receivePort.sendPort, errorPort.sendPort, path, keysCaseInsensitive);
+
+    var isolate = await Isolate.spawn<_IsolateParams>(_loadIkv, params,
+        errorsAreFatal: true);
+
+    receivePort.listen((data) {
+      var ikv = (data as IkvPack);
+      isolate.kill();
+      ikv._storage?.reopenFile();
+      completer.complete(ikv);
+    });
+
+    errorPort.listen((e) {
+      completer.completeError(e);
+    });
+
+    return completer.future;
   }
 
   /// Do not do strcit comparisons by ignoring case.
@@ -267,13 +294,6 @@ class IkvPack {
   }
 }
 
-// class KeysAndValues {
-//   final List<String> keys;
-//   final List<List<int>> values;
-
-//   KeysAndValues(this.keys, this.values);
-// }
-
 abstract class StorageBase {
   StorageBase(String path);
 
@@ -282,6 +302,31 @@ abstract class StorageBase {
   List<int> valueAt(int index);
   void dispose();
   bool get useIndexToGetValue;
+  // the bellow 2 methods are workarounds for passing Storage across isolates,
+  // since intenal object RandomAccessFile can't cross isolates boundaries
+  // closing file is done in spawned isolate and reopening is done in main isolate
+  void closeFile();
+  void reopenFile();
+}
+
+class _IsolateParams<E> {
+  final SendPort sendPort;
+  final SendPort errorPort;
+  final String path;
+  final bool keysCaseInsensitive;
+
+  _IsolateParams(
+      this.sendPort, this.errorPort, this.path, this.keysCaseInsensitive);
+}
+
+void _loadIkv(_IsolateParams params) async {
+  try {
+    var ikv = IkvPack(params.path, params.keysCaseInsensitive);
+    ikv._storage?.closeFile();
+    params.sendPort.send(ikv);
+  } catch (e) {
+    params.errorPort.send(e);
+  }
 }
 
 class _KeyBasket {

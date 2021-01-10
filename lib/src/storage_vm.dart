@@ -29,13 +29,13 @@ import 'ikvpack.dart';
 class Storage implements StorageBase {
   Storage(this.path) : _file = File(path).openSync();
 
-  final RandomAccessFile _file;
+  RandomAccessFile? _file;
   bool _disposed = false;
   List<_OffsetLength> _offsets = <_OffsetLength>[];
 
   @override
   void dispose() {
-    _file.closeSync();
+    _file?.closeSync();
     _disposed = true;
   }
 
@@ -46,27 +46,30 @@ class Storage implements StorageBase {
     // var sw = Stopwatch();
     // sw.start();
     // print('Reading ikvpack keys and value offsets...');
+
+    var f = _file as RandomAccessFile;
+
     if (_disposed) throw 'Storage object was disposed, cant use it';
-    _file.setPositionSync(4); // skip reserved
-    var length = _readInt32(_file);
-    var offsetsOffset = _readInt32(_file);
-    var valuesOffset = _readInt32(_file);
+    f.setPositionSync(4); // skip reserved
+    var length = _readInt32(f);
+    var offsetsOffset = _readInt32(f);
+    var valuesOffset = _readInt32(f);
     var keys = <String>[]..length;
 
     if (valuesOffset - offsetsOffset != length * 8) {
       throw 'Invalid file, number of ofset entires doesn\'t match the length';
     }
 
-    if (_file.lengthSync() <= offsetsOffset) {
+    if (f.lengthSync() <= offsetsOffset) {
       throw 'Invalid file, file to short (offsetsOffset)';
     }
 
-    if (_file.lengthSync() <= valuesOffset) {
+    if (f.lengthSync() <= valuesOffset) {
       throw 'Invalid file, file to short (valuesOffset)';
     }
 
     // tried reading file byte after byte, very slow, OS doesnt seem to read ahead and cache future file bytes
-    var bytes = _file.readSync(offsetsOffset - _file.positionSync());
+    var bytes = f.readSync(offsetsOffset - f.positionSync());
     // reading keys
 
     var prev = 0;
@@ -94,7 +97,7 @@ class Storage implements StorageBase {
 
     // reading value offsets
 
-    var bd = _file.readSync(length * 8).buffer.asByteData();
+    var bd = f.readSync(length * 8).buffer.asByteData();
 
     _offsets = List.generate(length,
         (i) => _OffsetLength(bd.getInt32(i * 8), bd.getInt32(i * 8 + 4)));
@@ -123,9 +126,21 @@ class Storage implements StorageBase {
   @override
   List<int> valueAt(int index) {
     var o = _offsets[index];
-    _file.setPositionSync(o.offset);
-    var value = _file.readSync(o.length);
+    var f = _file as RandomAccessFile;
+    f.setPositionSync(o.offset);
+    var value = f.readSync(o.length);
     return value.toList(growable: false);
+  }
+
+  @override
+  void closeFile() {
+    _file?.close();
+    _file = null;
+  }
+
+  @override
+  void reopenFile() {
+    _file = File(path).openSync();
   }
 }
 
