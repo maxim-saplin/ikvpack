@@ -284,6 +284,18 @@ void main() async {
       }
     });
 
+    test('IkvPack can be built from map in isolate', () async {
+      var progressCalledTimes = 0;
+      var maxProgress = 0;
+      var ik = await IkvPack.buildFromMapInIsolate(testMap, true, (progress) {
+        progressCalledTimes++;
+        maxProgress = progress;
+      });
+      expect(ik.length > 0, true);
+      expect(progressCalledTimes > 2, true);
+      expect(maxProgress, 100);
+    });
+
     setUpAll(() {
       try {
         Directory('tmp').deleteSync(recursive: true);

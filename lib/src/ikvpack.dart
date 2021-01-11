@@ -70,6 +70,13 @@ class IkvPack {
     return completer.future;
   }
 
+  static Future<IkvPack> buildFromMapInIsolate(Map<String, String> map,
+      [keysCaseInsensitive = true,
+      Function(int progressPercent)? updateProgress]) {
+    var ic = CallbackIsolate(IkvCallbackJob(map, keysCaseInsensitive));
+    return ic.run((arg) => updateProgress?.call(arg));
+  }
+
   //TODO, add test
   /// Deletes file on disk or related IndexedDB in Web
   static void delete(String path) {
@@ -439,14 +446,33 @@ void _loadIkv(_IsolateParams params) async {
 }
 
 class IkvPooledJob extends PooledJob<IkvPack> {
-  IkvPooledJob(this.path, this.keysCaseInsensitive);
   final String path;
   final bool keysCaseInsensitive;
+
+  IkvPooledJob(this.path, this.keysCaseInsensitive);
 
   @override
   IkvPack job() {
     var ikv = IkvPack(path, keysCaseInsensitive);
     ikv._storage?.closeFile();
     return ikv;
+  }
+}
+
+class IkvCallbackJob extends CallbackIsolateJob<IkvPack, int> {
+  final Map<String, String> map;
+  final bool keysCaseInsensitive;
+
+  IkvCallbackJob(this.map, this.keysCaseInsensitive) : super(true);
+
+  @override
+  Future<IkvPack> jobAsync() {
+    throw UnimplementedError();
+  }
+
+  @override
+  IkvPack jobSync() {
+    return IkvPack.fromMap(map, keysCaseInsensitive,
+        (int progress) => sendDataToCallback(progress));
   }
 }
