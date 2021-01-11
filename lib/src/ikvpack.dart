@@ -4,7 +4,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:typed_data';
-//import 'package:archive/archive.dart';
+import 'package:ikvpack/ikvpack.dart';
+
 import 'storage_vm.dart'
     if (dart.library.io) 'storage_vm.dart'
     if (dart.library.html) 'storage_web.dart';
@@ -56,6 +57,19 @@ class IkvPack {
     return completer.future;
   }
 
+  /// !Warning! Isolate pool needs to be maually started before using this method
+  /// and stoped when not needed anymore
+  static Future<IkvPack> loadInIsolatePool(IsolatePool pool, String path,
+      [keysCaseInsensitive = true]) async {
+    var completer = Completer<IkvPack>();
+
+    var ikv = await pool.scheduleJob(IkvPooledJob(path, keysCaseInsensitive));
+    ikv._storage?.reopenFile();
+    completer.complete(ikv);
+
+    return completer.future;
+  }
+
   //TODO, add test
   /// Deletes file on disk or related IndexedDB in Web
   static void delete(String path) {
@@ -73,6 +87,10 @@ class IkvPack {
   List<String> _keysLowerCase = [];
   final List<_KeyBasket> _keyBaskets = [];
   List<List<int>> _values = [];
+
+  // Archive packaghe appeared to be faster in compressing and decompressing
+  // though caught strange outofmemory exception on version 3.0-nullsafe
+  // Decided to used standrad Dart's codec
   //final ZLibDecoder decoder = ZLibDecoder();
 
   final ZLibCodec codec = ZLibCodec(
@@ -94,38 +112,52 @@ class IkvPack {
   bool get valuesInMemory => _valuesInMemory;
 
   /// String values are compressed via Zlib
-  IkvPack.fromMap(Map<String, String> map, [this.keysCaseInsensitive = true])
+  IkvPack.fromMap(Map<String, String> map,
+      [this.keysCaseInsensitive = true,
+      Function(int progressPercent)? updateProgress])
       : _valuesInMemory = true,
         _storage = null {
     var entries = _getSortedEntries(map);
-
+    if (updateProgress != null) updateProgress(5);
     //var enc = ZLibEncoder();
 
     _keysList =
         List.generate(entries.length, (i) => entries[i].key, growable: false);
+    if (updateProgress != null) updateProgress(10);
+
     if (keysCaseInsensitive) {
       _keysLowerCase = List.generate(
           entries.length, (i) => entries[i].keyLowerCase,
           growable: false);
     }
 
+    if (updateProgress != null) updateProgress(15);
+
     // var utfLength = 0;
     // var zipLength = 0;
+
+    var progress = 15;
+    var prevProgress = 15;
 
     _values = List.generate(entries.length, (i) {
       var utf = utf8.encode(entries[i].value);
       var zip = codec.encoder.convert(utf);
+      if (updateProgress != null) {
+        progress = (15 + 80 * i / entries.length).round();
+        if (progress != prevProgress) {
+          prevProgress = progress;
+          updateProgress(progress);
+        }
+      }
 
-      //var zip = enc.encode(utf);
-      // utfLength += utf.length;
-      // zipLength += zip.length;
-      // print('${utfLength}/${zipLength}');
       return zip;
-      //return utf;
     }, growable: false);
+
+    if (updateProgress != null) updateProgress(95);
 
     _keysReadOnly = UnmodifiableListView<String>(_keysList);
     _buildBaskets();
+    if (updateProgress != null) updateProgress(100);
   }
 
   List<_Triple> _getSortedEntries(Map<String, String> map) {
@@ -307,7 +339,7 @@ class IkvPack {
       if (b.firstLetter == value[0]) {
         for (var i = b.startIndex; i <= b.endIndex; i++) {
           if (list[i].startsWith(value)) {
-            keys.add(list[i]);
+            keys.add(_keysList[i]);
             if (keys.length >= maxResult) return keys;
           }
         }
@@ -340,26 +372,6 @@ abstract class StorageBase {
   // closing file is done in spawned isolate and reopening is done in main isolate
   void closeFile();
   void reopenFile();
-}
-
-class _IsolateParams<E> {
-  final SendPort sendPort;
-  final SendPort errorPort;
-  final String path;
-  final bool keysCaseInsensitive;
-
-  _IsolateParams(
-      this.sendPort, this.errorPort, this.path, this.keysCaseInsensitive);
-}
-
-void _loadIkv(_IsolateParams params) async {
-  try {
-    var ikv = IkvPack(params.path, params.keysCaseInsensitive);
-    ikv._storage?.closeFile();
-    params.sendPort.send(ikv);
-  } catch (e) {
-    params.errorPort.send(e);
-  }
 }
 
 class _KeyBasket {
@@ -404,4 +416,37 @@ class _Triple {
       : keyLowerCase = _fixOutOfOrder(key.toLowerCase());
 
   _Triple.noLowerCase(this.key, this.value) : keyLowerCase = '';
+}
+
+class _IsolateParams {
+  final SendPort sendPort;
+  final SendPort errorPort;
+  final String path;
+  final bool keysCaseInsensitive;
+
+  _IsolateParams(
+      this.sendPort, this.errorPort, this.path, this.keysCaseInsensitive);
+}
+
+void _loadIkv(_IsolateParams params) async {
+  try {
+    var ikv = IkvPack(params.path, params.keysCaseInsensitive);
+    ikv._storage?.closeFile();
+    params.sendPort.send(ikv);
+  } catch (e) {
+    params.errorPort.send(e);
+  }
+}
+
+class IkvPooledJob extends PooledJob<IkvPack> {
+  IkvPooledJob(this.path, this.keysCaseInsensitive);
+  final String path;
+  final bool keysCaseInsensitive;
+
+  @override
+  IkvPack job() {
+    var ikv = IkvPack(path, keysCaseInsensitive);
+    ikv._storage?.closeFile();
+    return ikv;
+  }
 }

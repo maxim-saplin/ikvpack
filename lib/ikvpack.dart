@@ -8,3 +8,4 @@
 library ikvpack;
 
 export 'src/ikvpack.dart' show IkvPack;
+export 'src/isolate_helpers.dart';
