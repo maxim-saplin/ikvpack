@@ -82,6 +82,9 @@ class IsolatePool {
             jobCompleters[data.jobIndex].completeError(data.error);
           }
           _runJobWithVacantIsolate();
+        } else {
+          last.completeError(
+              'Isolate recevied unexpected input: ${data.runtimeType}');
         }
       });
     }
@@ -91,7 +94,7 @@ class IsolatePool {
     print('spawn() called on ${numberOfIsolates} isolates'
         '(${spawnSw.elapsedMicroseconds} microseconds)');
 
-    await last.future;
+    return last.future;
   }
 
   void stop() {

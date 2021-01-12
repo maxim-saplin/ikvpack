@@ -56,6 +56,23 @@ void runCommonTests(IkvPack ikv) {
     expect(ikv['wewer'], '');
     expect(ikv.valueRawCompressed('wewer').isEmpty, true);
   });
+
+  test('Consolidated keysStartingWith works on case sensitive keys',
+      consolidatedTest(ikv));
+}
+
+dynamic consolidatedTest(IkvPack ikv) {
+  var m = <String, String>{'': '', 'wew': 'dsdsd', 'sss': '', 'sdss': 'd'};
+  var ik = IkvPack.fromMap(m);
+  var ikvs = [ikv, ikv, ik];
+
+  var keys = IkvPack.consolidatedKeysStartingWith(ikvs, 'зьнізіць');
+
+  expect(keys.length, 1);
+  expect(keys[0], 'зьнізіць');
+
+  keys = IkvPack.consolidatedKeysStartingWith(ikvs, 'b', 10);
+  expect(keys.length, 10);
 }
 
 void runCaseInsensitiveTests(IkvPack ikv) {
@@ -99,6 +116,16 @@ void runCaseInsensitiveTests(IkvPack ikv) {
     var keys = ikv.keysStartingWith('ихтыёл');
     expect(keys.length, 1);
   });
+
+  test('"и" and "i" subsitute wroks when getting value by original key', () {
+    var keys = ikv.keysStartingWith('ихтыёл');
+    expect(keys.length, 1);
+    var val = ikv[keys[0]];
+    expect(val, '<div>ихтиол</div>');
+  });
+
+  test('Consolidated keysStartingWith works on case-insensitive keys',
+      consolidatedTest(ikv));
 }
 
 void runInMemoryRelatedTests(IkvPack ikv) {

@@ -3,12 +3,18 @@ import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:math';
 import 'dart:typed_data';
 import 'package:ikvpack/ikvpack.dart';
 
 import 'storage_vm.dart'
     if (dart.library.io) 'storage_vm.dart'
     if (dart.library.html) 'storage_web.dart';
+
+List<String> keysStartingWith(Iterable<IkvPack> packs) {
+  var keys = <String>[];
+  return keys;
+}
 
 class IkvPack {
   final Storage? _storage;
@@ -17,17 +23,17 @@ class IkvPack {
       : _valuesInMemory = false,
         _storage = Storage(path) {
     try {
-      _keysList = _storage!.readSortedKeys();
+      _originalKeys = _storage!.readSortedKeys();
     } catch (e) {
       _storage?.dispose();
       rethrow;
     }
     if (keysCaseInsensitive) {
-      _keysLowerCase = List.generate(_keysList.length,
-          (i) => _Triple._fixOutOfOrder(_keysList[i].toLowerCase()),
+      _shadowKeys = List.generate(_originalKeys.length,
+          (i) => _Triple._fixOutOfOrder(_originalKeys[i].toLowerCase()),
           growable: false);
     }
-    _keysReadOnly = UnmodifiableListView<String>(_keysList);
+    _keysReadOnly = UnmodifiableListView<String>(_originalKeys);
 
     _buildBaskets();
   }
@@ -89,9 +95,9 @@ class IkvPack {
   /// with 'е' (code 1077)
   bool keysCaseInsensitive = true;
 
-  List<String> _keysList = [];
+  List<String> _originalKeys = [];
   // TODO, Test performance/mem consumption, maybe make 5-10 char lower case keys index for fast searches, not full keys
-  List<String> _keysLowerCase = [];
+  List<String> _shadowKeys = [];
   final List<_KeyBasket> _keyBaskets = [];
   List<List<int>> _values = [];
 
@@ -128,12 +134,12 @@ class IkvPack {
     if (updateProgress != null) updateProgress(5);
     //var enc = ZLibEncoder();
 
-    _keysList =
+    _originalKeys =
         List.generate(entries.length, (i) => entries[i].key, growable: false);
     if (updateProgress != null) updateProgress(10);
 
     if (keysCaseInsensitive) {
-      _keysLowerCase = List.generate(
+      _shadowKeys = List.generate(
           entries.length, (i) => entries[i].keyLowerCase,
           growable: false);
     }
@@ -162,7 +168,7 @@ class IkvPack {
 
     if (updateProgress != null) updateProgress(95);
 
-    _keysReadOnly = UnmodifiableListView<String>(_keysList);
+    _keysReadOnly = UnmodifiableListView<String>(_originalKeys);
     _buildBaskets();
     if (updateProgress != null) updateProgress(100);
   }
@@ -212,8 +218,8 @@ class IkvPack {
 
   // TODO test 1 key, 3 keys 'a', 'b' and 'c'
   void _buildBaskets() {
-    var list = _keysList;
-    if (keysCaseInsensitive) list = _keysLowerCase;
+    var list = _originalKeys;
+    if (keysCaseInsensitive) list = _shadowKeys;
 
     var firstLetter = list[0][0];
     var index = 0;
@@ -237,10 +243,10 @@ class IkvPack {
 
   /// Serilized object to given file on VM and IndexedDB in Web
   void saveTo(String path) {
-    saveToPath(path, _keysList, _values);
+    saveToPath(path, _originalKeys, _values);
   }
 
-  int get length => _keysList.length;
+  int get length => _originalKeys.length;
 
   @pragma('vm:prefer-inline')
   @pragma('dart2js:tryInline')
@@ -294,10 +300,11 @@ class IkvPack {
   @pragma('vm:prefer-inline')
   @pragma('dart2js:tryInline')
   int indexOf(String key) {
-    var list = _keysList;
+    var list = _originalKeys;
     if (keysCaseInsensitive) {
       key = key.toLowerCase();
-      list = _keysLowerCase;
+      key = _Triple._fixOutOfOrder(key);
+      list = _shadowKeys;
     }
 
     for (var b in _keyBaskets) {
@@ -330,24 +337,27 @@ class IkvPack {
   @pragma('dart2js:tryInline')
   bool containsKey(String key) => indexOf(key) > -1;
 
-  List<String> keysStartingWith(String value, [int maxResult = 100]) {
+  List<String> keysStartingWith(String value,
+      [maxResults = 100, returnShadowKeys = false]) {
     var keys = <String>[];
-    var list = _keysList;
+    var list = _originalKeys;
     value = value.trim();
 
     if (keysCaseInsensitive) {
       value = value.toLowerCase();
       value = _Triple._fixOutOfOrder(
           value); // TODO, add test 'имгненне' finds 'iмгненне', bug which becomes feature (allow searching BY words with RU substitues)
-      list = _keysLowerCase;
+      list = _shadowKeys;
     }
 
     for (var b in _keyBaskets) {
       if (b.firstLetter == value[0]) {
         for (var i = b.startIndex; i <= b.endIndex; i++) {
           if (list[i].startsWith(value)) {
-            keys.add(_keysList[i]);
-            if (keys.length >= maxResult) return keys;
+            keys.add(keysCaseInsensitive && returnShadowKeys
+                ? _shadowKeys[i]
+                : _originalKeys[i]);
+            if (keys.length >= maxResults) return keys;
           }
         }
       }
@@ -362,6 +372,40 @@ class IkvPack {
   int get sizeBytes {
     if (valuesInMemory || _storage == null) return -1;
     return _storage!.sizeBytes;
+  }
+
+  /// Helper methods that searches for keys in a number of packs
+  /// and returns a unique set of keys. If keysCaseInsesitive, shadow
+  /// versions are used for matches, but original keys are returned
+  static List<String> consolidatedKeysStartingWith(
+      Iterable<IkvPack> packs, String value,
+      [int maxResults = 100]) {
+    var matches = <String>[];
+
+    for (var p in packs) {
+      matches
+          .addAll(p.keysStartingWith(value, maxResults, p.keysCaseInsensitive));
+    }
+
+    if (matches.length > 1) {
+      matches.sort();
+      var unique = <String>[];
+      unique.add(matches[0]);
+
+      for (var i = 0; i < matches.length; i++) {
+        if (matches[i] != unique.last) {
+          unique.add(matches[i]);
+        }
+      }
+
+      matches = unique;
+
+      if (matches.length > maxResults) {
+        matches = matches.sublist(0, min(maxResults, matches.length));
+      }
+    }
+
+    return matches;
   }
 }
 
