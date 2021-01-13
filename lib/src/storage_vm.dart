@@ -31,7 +31,14 @@ class Storage implements StorageBase {
 
   RandomAccessFile? _file;
   bool _disposed = false;
-  List<_OffsetLength> _offsets = <_OffsetLength>[];
+  //List<_OffsetLength> _offsets = <_OffsetLength>[];
+  // Trading off faster dictionaru load time for slower value lookup
+  // Cleaner approach with _OffsetLength list gave ~900ms load time on a large dictionary (2+ mln records)
+  // Just reading data and storing ByteData gave ~660ms. It seems reasonable to avoid the delay
+  // in a loop with 2mln iterations to fery infrequent operastions, e.g. 0,1ms of value extraction
+  // delay won't be noticed when looking a single value. Also given that all values are dcompresed
+  // the delayed extraction of offset/length won't be comparable to the ammount of time needed by zlib
+  ByteData? _offsets;
 
   @override
   void dispose() {
@@ -51,9 +58,9 @@ class Storage implements StorageBase {
 
     if (_disposed) throw 'Storage object was disposed, cant use it';
     f.setPositionSync(4); // skip reserved
-    var length = _readInt32(f);
-    var offsetsOffset = _readInt32(f);
-    var valuesOffset = _readInt32(f);
+    var length = _readUint32(f);
+    var offsetsOffset = _readUint32(f);
+    var valuesOffset = _readUint32(f);
     var keys = <String>[]..length;
 
     if (valuesOffset - offsetsOffset != length * 8) {
@@ -74,11 +81,12 @@ class Storage implements StorageBase {
 
     var prev = 0;
     var i = 0;
+    var decoder = Utf8Decoder(allowMalformed: true);
     keys = List.generate(length, (index) {
       while (i < bytes.length) {
         if (bytes[i] == 10) {
-          var key = utf8.decode(Uint8List.view(bytes.buffer, prev, i - prev),
-              allowMalformed: true);
+          var key =
+              decoder.convert(Uint8List.view(bytes.buffer, prev, i - prev));
           i++;
           prev = i;
 
@@ -97,10 +105,14 @@ class Storage implements StorageBase {
 
     // reading value offsets
 
-    var bd = f.readSync(length * 8).buffer.asByteData();
+    //var bd = f.readSync(length * 8).buffer.asByteData();
 
-    _offsets = List.generate(length,
-        (i) => _OffsetLength(bd.getInt32(i * 8), bd.getInt32(i * 8 + 4)));
+    // _offsets = List.generate(length, (i) {
+    //   // var pair = bd.getInt64(i * 8, Endian.little);
+    //   // return _OffsetLength(pair >> 32, pair & 0xffffffff);
+    //   return _OffsetLength(bd.getUint32(i * 8), bd.getUint32(i * 8 + 4));
+    // });
+    _offsets = f.readSync(length * 8).buffer.asByteData();
 
     return keys;
   }
@@ -111,11 +123,11 @@ class Storage implements StorageBase {
     throw UnimplementedError();
   }
 
-  int _readInt32(RandomAccessFile raf) {
+  int _readUint32(RandomAccessFile raf) {
     var int32 = Uint8List(4);
     if (raf.readIntoSync(int32) <= 0) return -1;
     var bd = ByteData.sublistView(int32);
-    var val = bd.getInt32(0);
+    var val = bd.getUint32(0);
     return val;
   }
 
@@ -125,10 +137,12 @@ class Storage implements StorageBase {
 
   @override
   List<int> valueAt(int index) {
-    var o = _offsets[index];
+    //var o = _offsets[index];
+    var offset = _offsets!.getUint32(index * 8);
+    var length = _offsets!.getUint32((index + 1) * 8);
     var f = _file as RandomAccessFile;
-    f.setPositionSync(o.offset);
-    var value = f.readSync(o.length);
+    f.setPositionSync(offset);
+    var value = f.readSync(length);
     return value.toList(growable: false);
   }
 
@@ -153,16 +167,16 @@ void deleteFromPath(String path) {
 }
 
 void saveToPath(String path, List<String> keys, List<List<int>> values) {
-  void _writeInt32(RandomAccessFile raf, int value) {
+  void _writeUint32(RandomAccessFile raf, int value) {
     var bd = ByteData(4);
-    bd.setInt32(0, value);
+    bd.setUint32(0, value);
     raf.writeFromSync(bd.buffer.asUint8List());
   }
 
   var raf = File(path).openSync(mode: FileMode.write);
   try {
     raf.setPositionSync(4); //skip reserved
-    _writeInt32(raf, keys.length);
+    _writeUint32(raf, keys.length);
     raf.setPositionSync(16); //skip offsets and values headers
     for (var k in keys) {
       var line = utf8.encode(k + '\n');
@@ -171,11 +185,11 @@ void saveToPath(String path, List<String> keys, List<List<int>> values) {
     // write offsets posisition
     var offsetsOffset = raf.positionSync();
     raf.setPositionSync(8);
-    _writeInt32(raf, offsetsOffset);
+    _writeUint32(raf, offsetsOffset);
 
     // move to values section start
     var valuesOffset = offsetsOffset + 8 * keys.length;
-    _writeInt32(raf, valuesOffset); // write values posisition
+    _writeUint32(raf, valuesOffset); // write values posisition
     raf.setPositionSync(valuesOffset);
     var offsets = <_OffsetLength>[];
 
@@ -189,8 +203,8 @@ void saveToPath(String path, List<String> keys, List<List<int>> values) {
     // write offsets
     raf.setPositionSync(offsetsOffset);
     for (var ol in offsets) {
-      _writeInt32(raf, ol.offset);
-      _writeInt32(raf, ol.length);
+      _writeUint32(raf, ol.offset);
+      _writeUint32(raf, ol.length);
     }
 
     //  write values

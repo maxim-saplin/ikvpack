@@ -58,7 +58,7 @@ void runCommonTests(IkvPack ikv) {
   });
 
   test('Consolidated keysStartingWith works on case sensitive keys',
-      consolidatedTest(ikv));
+      () => consolidatedTest(ikv));
 }
 
 dynamic consolidatedTest(IkvPack ikv) {
@@ -125,7 +125,7 @@ void runCaseInsensitiveTests(IkvPack ikv) {
   });
 
   test('Consolidated keysStartingWith works on case-insensitive keys',
-      consolidatedTest(ikv));
+      () => consolidatedTest(ikv));
 }
 
 void runInMemoryRelatedTests(IkvPack ikv) {
