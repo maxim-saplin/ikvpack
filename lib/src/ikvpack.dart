@@ -242,20 +242,21 @@ class IkvPack {
     var index = 0;
 
     if (list.length == 1) {
-      _keyBaskets.add(_KeyBasket(firstLetter, index, index));
+      _keyBaskets.add(_KeyBasket(firstLetter.codeUnits[0], index, index));
       return;
     }
 
     for (var i = 1; i < list.length; i++) {
       var newFirstLetter = list[i][0];
       if (newFirstLetter != firstLetter) {
-        _keyBaskets.add(_KeyBasket(firstLetter, index, i - 1));
+        _keyBaskets.add(_KeyBasket(firstLetter.codeUnits[0], index, i - 1));
         firstLetter = newFirstLetter;
         index = i;
       }
     }
 
-    _keyBaskets.add(_KeyBasket(firstLetter, index, list.length - 1));
+    _keyBaskets
+        .add(_KeyBasket(firstLetter.codeUnits[0], index, list.length - 1));
   }
 
   /// Serilized object to given file on VM and IndexedDB in Web
@@ -326,8 +327,10 @@ class IkvPack {
       list = _shadowKeys;
     }
 
+    var fl = key[0].codeUnits[0];
+
     for (var b in _keyBaskets) {
-      if (b.firstLetter == key[0]) {
+      if (b.firstLetter == fl) {
         var l = b.startIndex;
         var r = b.endIndex;
         while (l <= r) {
@@ -356,11 +359,37 @@ class IkvPack {
   @pragma('dart2js:tryInline')
   bool containsKey(String key) => indexOf(key) > -1;
 
+  int _narrowDownFirst(String key, _KeyBasket b, List<String> list) {
+    var l = b.startIndex;
+    var r = b.endIndex;
+
+    while (l <= r) {
+      var m = (l + (r - l) / 2).round();
+
+      var res = key.compareTo(list[m]);
+
+      // Check if x is present at mid
+      if (res == 0) break;
+
+      if (res > 0) {
+        // If x greater, ignore left half
+        l = m + 1;
+      } else {
+        // If x is smaller, ignore right half
+        r = m - 1;
+      }
+    }
+
+    return l < r ? l : r;
+  }
+
   List<String> keysStartingWith(String key,
-      [maxResults = 100, returnShadowKeys = false]) {
+      [int maxResults = 100, bool returnShadowKeys = false]) {
     var keys = <String>[];
     var list = _originalKeys;
     key = key.trim();
+
+    if (key.isEmpty) return keys;
 
     if (keysCaseInsensitive) {
       key = key.toLowerCase();
@@ -372,17 +401,29 @@ class IkvPack {
       list = _shadowKeys;
     }
 
+    var fl = key[0].codeUnits[0];
+
     for (var b in _keyBaskets) {
-      if (b.firstLetter == key[0]) {
+      if (b.firstLetter == fl) {
         var startIndex = b.startIndex;
         var endIndex = b.endIndex;
+        if (key.length == 1) {
+          return (_shadowKeysUsed && returnShadowKeys
+                  ? _shadowKeys
+                  : _originalKeys)
+              .sublist(startIndex, min(endIndex + 1, startIndex + maxResults));
+        } else {
+          //startIndex = _narrowDownFirst(key, b, list);
 
-        for (var i = startIndex; i <= endIndex; i++) {
-          if (list[i].startsWith(key)) {
-            keys.add(_shadowKeysUsed && returnShadowKeys
-                ? _shadowKeys[i]
-                : _originalKeys[i]);
-            if (keys.length >= maxResults) return keys;
+          for (var i = startIndex; i <= endIndex; i++) {
+            if (list[i].startsWith(key)) {
+              keys.add(_shadowKeysUsed && returnShadowKeys
+                  ? _shadowKeys[i]
+                  : _originalKeys[i]);
+              if (keys.length >= maxResults) {
+                return keys;
+              }
+            }
           }
         }
       }
@@ -411,34 +452,35 @@ class IkvPack {
   static List<String> consolidatedKeysStartingWith(
       Iterable<IkvPack> packs, String value,
       [int maxResults = 100]) {
+    var sw = Stopwatch();
+    sw.start();
     var matches = <String>[];
 
+    var max2 = maxResults;
+
     for (var p in packs) {
-      matches
-          .addAll(p.keysStartingWith(value, maxResults, p.keysCaseInsensitive));
+      matches.addAll(p.keysStartingWith(value, max2, p.keysCaseInsensitive));
+      if (matches.length > maxResults) max2 = (maxResults / 2).floor();
+      if (matches.length > 3 * maxResults) max2 = (maxResults / 2).floor();
     }
 
-    List<String> distinct(List<String> list) {
-      if (list.isEmpty) return list;
-      list.sort();
-      var unique = <String>[];
-      unique.add(list[0]);
-
-      for (var i = 0; i < list.length; i++) {
-        if (list[i] != unique.last) {
-          unique.add(list[i]);
-        }
-      }
-
-      return unique;
-    }
+    print(
+        '|Lookup matches ${matches.length}, ${sw.elapsedMicroseconds} microseconds');
+    sw.reset();
 
     if (matches.length > 1) {
       matches = distinct(matches);
+      print(
+          '|Distinct ${matches.length}, ${sw.elapsedMicroseconds} microseconds');
+      sw.reset();
 
       if (matches.length > maxResults) {
         matches = matches.sublist(0, min(maxResults, matches.length));
       }
+
+      print(
+          '|Sublist ${matches.length}, ${sw.elapsedMicroseconds} microseconds');
+      sw.reset();
 
       //recover original keys
       for (var i = 0; i < matches.length; i++) {
@@ -446,7 +488,7 @@ class IkvPack {
         for (var p in packs) {
           if (p.shadowKeysUsed) {
             var index = p.indexOf(matches[i]);
-            if (index > 0) {
+            if (index > -1) {
               matches[i] = p._originalKeys[index];
               re_continue = true;
               continue;
@@ -455,10 +497,33 @@ class IkvPack {
         }
         if (re_continue) continue;
       }
+
+      print('|Originals recovered, ${sw.elapsedMicroseconds} microseconds');
+      sw.reset();
     }
 
-    return distinct(matches);
+    // 82 dics, я being moved by Я
+    // matches = distinct(matches);
+    // print(
+    //     '|Distinct2 ${matches.length}, ${sw.elapsedMicroseconds} microseconds');
+
+    return matches;
   }
+}
+
+List<String> distinct(List<String> list) {
+  if (list.isEmpty) return list;
+  list.sort();
+  var unique = <String>[];
+  unique.add(list[0]);
+
+  for (var i = 0; i < list.length; i++) {
+    if (list[i] != unique.last) {
+      unique.add(list[i]);
+    }
+  }
+
+  return unique;
 }
 
 abstract class StorageBase {
@@ -481,7 +546,7 @@ abstract class StorageBase {
 }
 
 class _KeyBasket {
-  final String firstLetter;
+  final int firstLetter;
   final int startIndex;
   final int endIndex;
 
