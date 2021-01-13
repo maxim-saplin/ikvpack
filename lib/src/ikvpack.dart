@@ -419,6 +419,7 @@ class IkvPack {
     }
 
     List<String> distinct(List<String> list) {
+      if (list.isEmpty) return list;
       list.sort();
       var unique = <String>[];
       unique.add(list[0]);
