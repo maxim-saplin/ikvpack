@@ -58,13 +58,13 @@ void runCommonTests(IkvPack ikv) {
   });
 
   test('Consolidated keysStartingWith works on case sensitive keys',
-      () => consolidatedTest(ikv));
+      () => consolidatedTest(ikv, ikv));
 }
 
-dynamic consolidatedTest(IkvPack ikv) {
+dynamic consolidatedTest(IkvPack ikv1, IkvPack ikv2) {
   var m = <String, String>{'': '', 'wew': 'dsdsd', 'sss': '', 'sdss': 'd'};
   var ik = IkvPack.fromMap(m);
-  var ikvs = [ikv, ikv, ik];
+  var ikvs = [ikv1, ikv2, ik];
 
   var keys = IkvPack.consolidatedKeysStartingWith(ikvs, 'зьнізіць');
 
@@ -125,7 +125,7 @@ void runCaseInsensitiveTests(IkvPack ikv) {
   });
 
   test('Consolidated keysStartingWith works on case-insensitive keys',
-      () => consolidatedTest(ikv));
+      () => consolidatedTest(ikv, ikv));
 }
 
 void runInMemoryRelatedTests(IkvPack ikv) {
@@ -210,16 +210,94 @@ void main() async {
   });
 
   group('File tests, case-insensitive', () {
-    _ikv = IkvPack.fromMap(testMap, true);
-    (_ikv!).saveTo('testIkv.dat');
+    // _ikv = IkvPack.fromMap(testMap, true);
+    // (_ikv!).saveTo('testIkv.dat');
 
     _ikv = IkvPack('test/testIkv.dat', true);
 
     runCommonTests(_ikv!);
     runCaseInsensitiveTests(_ikv!);
 
+    test('IkvPack can return progress while being built from map', () async {
+      var progressCalledTimes = 0;
+      var maxProgress = 0;
+      var ik = IkvPack.fromMap(testMap, true, (progress) {
+        progressCalledTimes++;
+        maxProgress = progress;
+      });
+      expect(ik.length > 0, true);
+      expect(progressCalledTimes > 2, true);
+      expect(maxProgress, 100);
+    });
+
+    test('IkvPack can be built from map in isolate', () async {
+      var progressCalledTimes = 0;
+      var maxProgress = 0;
+      var ik = await IkvPack.buildFromMapInIsolate(testMap, true, (progress) {
+        progressCalledTimes++;
+        maxProgress = progress;
+      });
+      expect(ik.length > 0, true);
+      expect(progressCalledTimes > 2, true);
+      expect(maxProgress, 100);
+    });
+  });
+
+  group('File tests, case-sensitive', () {
+    _ikv = IkvPack('test/testIkv.dat', false);
+
+    runCommonTests(_ikv!);
+  });
+
+  group('File tests', () {
+    test('Disposed ikv cant be used anymore', () {
+      var m = <String, String>{'a': 'aaa', 'b': 'bbb', 'c': 'ccc'};
+      var ik = IkvPack.fromMap(m);
+
+      expect(ik.length, 3);
+      expect(ik['a'], 'aaa');
+      expect(ik['b'], 'bbb');
+      expect(ik['c'], 'ccc');
+
+      ik.saveTo('tmp/test.dat');
+      ik = IkvPack('tmp/test.dat');
+      ik.dispose();
+
+      expect(ik.length, 3);
+      expect(() => ik['a'], throwsException);
+    });
+
+    test('IkvPack can be loaded in isolate', () async {
+      var ik = await IkvPack.loadInIsolate('test/testIkv.dat', true);
+      var v = ik['зараць'];
+      expect(v, '<div>вспахать</div>');
+    });
+
+    test('IkvPacks can be loaded in isolate pool', () async {
+      var pool = IsolatePool(4);
+      await pool.start();
+      var m = <String, String>{'a': 'aaa', 'b': 'bbb', 'c': 'ccc'};
+
+      for (var i = 0; i < 20; i++) {
+        var ik = IkvPack.fromMap(m);
+        ik.saveTo('tmp/test${i}.dat');
+      }
+
+      var futures = <Future<IkvPack>>[];
+
+      for (var i = 0; i < 20; i++) {
+        futures.add(IkvPack.loadInIsolatePool(pool, 'tmp/test${i}.dat'));
+      }
+
+      var res = await Future.wait(futures);
+
+      for (var i = 0; i < 20; i++) {
+        expect(res[i].length, 3);
+      }
+    });
+
     test('Files size is properly returned', () {
-      expect(_ikv!.sizeBytes, 262491);
+      expect(IkvPack('test/testIkv.dat').sizeBytes, 263927);
     });
 
     test('File can be deleted', () {
@@ -253,93 +331,39 @@ void main() async {
       expect(ik['b'], 'bbb');
       expect(ik['c'], 'ccc');
     });
-    test('Disposed ikv cant be used anymore', () {
-      var m = <String, String>{'a': 'aaa', 'b': 'bbb', 'c': 'ccc'};
-      var ik = IkvPack.fromMap(m);
 
-      expect(ik.length, 3);
-      expect(ik['a'], 'aaa');
-      expect(ik['b'], 'bbb');
-      expect(ik['c'], 'ccc');
+    test(
+        'Consolidated keysStartingWith works on mixed Ikvs ( both case- sensitive, insensitive)',
+        () => consolidatedTest(IkvPack('test/testIkv.dat', true),
+            IkvPack('test/testIkv.dat', false)));
 
-      ik.saveTo('tmp/test.dat');
-      ik = IkvPack('tmp/test.dat');
-      ik.dispose();
-
-      expect(ik.length, 3);
-      expect(() => ik['a'], throwsException);
+    test('Flags are properly read from file', () {
+      var ikv00 = IkvPack('test/testIkv.dat');
+      expect(ikv00.noOutOfOrderFlag, false);
+      expect(ikv00.noUpperCaseFlag, false);
+      var ikv11 = IkvPack('test/testIkvFlags.dat');
+      expect(ikv11.noOutOfOrderFlag, true);
+      expect(ikv11.noUpperCaseFlag, true);
     });
 
-    test('IkvPack can return progress while being built from map', () async {
-      var progressCalledTimes = 0;
-      var maxProgress = 0;
-      var ik = IkvPack.fromMap(testMap, true, (progress) {
-        progressCalledTimes++;
-        maxProgress = progress;
-      });
-      expect(ik.length > 0, true);
-      expect(progressCalledTimes > 2, true);
-      expect(maxProgress, 100);
-    });
-
-    test('IkvPack can be loaded in isolate', () async {
-      var ik = await IkvPack.loadInIsolate('test/testIkv.dat', true);
-      var v = ik['зараць'];
-      expect(v, '<div>вспахать</div>');
-    });
-
-    test('IkvPacks can be loaded in isolate pool', () async {
-      var pool = IsolatePool(4);
-      await pool.start();
-      var m = <String, String>{'a': 'aaa', 'b': 'bbb', 'c': 'ccc'};
-
-      for (var i = 0; i < 20; i++) {
-        var ik = IkvPack.fromMap(m);
-        ik.saveTo('tmp/test${i}.dat');
-      }
-
-      var futures = <Future<IkvPack>>[];
-
-      for (var i = 0; i < 20; i++) {
-        futures.add(IkvPack.loadInIsolatePool(pool, 'tmp/test${i}.dat'));
-      }
-
-      var res = await Future.wait(futures);
-
-      for (var i = 0; i < 20; i++) {
-        expect(res[i].length, 3);
-      }
-    });
-
-    test('IkvPack can be built from map in isolate', () async {
-      var progressCalledTimes = 0;
-      var maxProgress = 0;
-      var ik = await IkvPack.buildFromMapInIsolate(testMap, true, (progress) {
-        progressCalledTimes++;
-        maxProgress = progress;
-      });
-      expect(ik.length > 0, true);
-      expect(progressCalledTimes > 2, true);
-      expect(maxProgress, 100);
-    });
-
-    setUpAll(() {
-      try {
-        Directory('tmp').deleteSync(recursive: true);
-      } catch (_) {}
-      Directory('tmp').createSync();
-    });
-
-    tearDownAll(() {
-      try {
-        Directory('tmp').deleteSync(recursive: true);
-      } catch (_) {}
+    test('Flags are resetcted when creating shadow keys', () {
+      var ikv11 = IkvPack('test/testIkvFlags.dat');
+      expect(ikv11.noOutOfOrderFlag, true);
+      expect(ikv11.noUpperCaseFlag, true);
+      expect(ikv11.shadowKeysUsed, false);
     });
   });
 
-  group('File tests, case-sensitive', () {
-    _ikv = IkvPack('test/testIkv.dat', false);
+  setUpAll(() {
+    try {
+      Directory('tmp').deleteSync(recursive: true);
+    } catch (_) {}
+    Directory('tmp').createSync();
+  });
 
-    runCommonTests(_ikv!);
+  tearDownAll(() {
+    try {
+      Directory('tmp').deleteSync(recursive: true);
+    } catch (_) {}
   });
 }

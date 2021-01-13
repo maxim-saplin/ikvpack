@@ -9,15 +9,18 @@ import 'ikvpack.dart';
 /// [Headers][Keys][Values offsets][Values]
 ///
 /// - [Headers] section
-///   - 4 bytes: reserved
+///   - 4 bytes: flags
+///     Bit #1 - no need to fix out-of-order chars (e.g. for non Russian languag)
+///     Bit #2 - no upper-case, no need for lower-case shadow keys
+///     E.g. if both bits are set there's no need for shadow keys
 ///   - 4 bytes: (Length), number or key/value pairs
 ///   - 4 bytes: (Values offsets), location of the first byte with offsets in file and lengths in bytes of values
 ///   - 4 bytes: (Values start), location of the first byte with values
 ///   * Difference (Values start) - (Velues offset) is 8*(Length) - the length of
 ///   (Values offsets) section is 8 bytes time number of values.
 /// - [Keys] section
-///   - '\n' delimited keys
-///   * Number of '\n' must be equal to (Length)
+///   - 2 bytes: string length in bytes
+///   - String bytes
 /// - [Values offsets] section
 ///   - Array of 8-byte pairs:
 ///     - 4 bytes: value offset in file
@@ -35,8 +38,8 @@ class Storage implements StorageBase {
   // Trading off faster dictionaru load time for slower value lookup
   // Cleaner approach with _OffsetLength list gave ~900ms load time on a large dictionary (2+ mln records)
   // Just reading data and storing ByteData gave ~660ms. It seems reasonable to avoid the delay
-  // in a loop with 2mln iterations to fery infrequent operastions, e.g. 0,1ms of value extraction
-  // delay won't be noticed when looking a single value. Also given that all values are dcompresed
+  // in a loop with 2mln iterations to very infrequent operastions, e.g. 0,1ms of value extraction
+  // delay won't be noticed when looking up a single value (which is the more relevant case). Also given that all values are dcompresed
   // the delayed extraction of offset/length won't be comparable to the ammount of time needed by zlib
   ByteData? _offsets;
 
@@ -48,6 +51,13 @@ class Storage implements StorageBase {
 
   final String path;
 
+  int _flags = 0;
+
+  @override
+  bool get noOutOfOrderFlag => (_flags & 0x80000000) >> 31 == 1;
+  @override
+  bool get noUpperCaseFlag => (_flags & 0x80000000) >> 31 == 1;
+
   @override
   List<String> readSortedKeys() {
     // var sw = Stopwatch();
@@ -57,11 +67,12 @@ class Storage implements StorageBase {
     var f = _file as RandomAccessFile;
 
     if (_disposed) throw 'Storage object was disposed, cant use it';
-    f.setPositionSync(4); // skip reserved
+    _flags = _readUint32(f, Endian.big);
+    //f.setPositionSync(4); // skip reserved
     var length = _readUint32(f);
     var offsetsOffset = _readUint32(f);
     var valuesOffset = _readUint32(f);
-    var keys = <String>[]..length;
+    var keys = <String>[];
 
     if (valuesOffset - offsetsOffset != length * 8) {
       throw 'Invalid file, number of ofset entires doesn\'t match the length';
@@ -76,25 +87,19 @@ class Storage implements StorageBase {
     }
 
     // tried reading file byte after byte, very slow, OS doesnt seem to read ahead and cache future file bytes
-    var bytes = f.readSync(offsetsOffset - f.positionSync());
-    // reading keys
-
+    var bytes = f.readSync(offsetsOffset - f.positionSync()).buffer;
+    var bd = bytes.asByteData();
     var prev = 0;
-    var i = 0;
+
+    // reading keys
     var decoder = Utf8Decoder(allowMalformed: true);
     keys = List.generate(length, (index) {
-      while (i < bytes.length) {
-        if (bytes[i] == 10) {
-          var key =
-              decoder.convert(Uint8List.view(bytes.buffer, prev, i - prev));
-          i++;
-          prev = i;
+      var length = bd.getUint16(prev);
+      prev += 2;
+      var key = decoder.convert(Uint8List.view(bytes, prev, length));
+      prev += length;
 
-          return key;
-        }
-        i++;
-      }
-      throw 'Invalid file, number of keys read doesnt match number in headers';
+      return key;
     });
 
     if (keys.length != length) {
@@ -123,11 +128,11 @@ class Storage implements StorageBase {
     throw UnimplementedError();
   }
 
-  int _readUint32(RandomAccessFile raf) {
+  int _readUint32(RandomAccessFile raf, [Endian endian = Endian.big]) {
     var int32 = Uint8List(4);
     if (raf.readIntoSync(int32) <= 0) return -1;
     var bd = ByteData.sublistView(int32);
-    var val = bd.getUint32(0);
+    var val = bd.getUint32(0, endian);
     return val;
   }
 
@@ -139,7 +144,7 @@ class Storage implements StorageBase {
   List<int> valueAt(int index) {
     //var o = _offsets[index];
     var offset = _offsets!.getUint32(index * 8);
-    var length = _offsets!.getUint32((index + 1) * 8);
+    var length = _offsets!.getUint32(index * 8 + 4);
     var f = _file as RandomAccessFile;
     f.setPositionSync(offset);
     var value = f.readSync(length);
@@ -173,13 +178,20 @@ void saveToPath(String path, List<String> keys, List<List<int>> values) {
     raf.writeFromSync(bd.buffer.asUint8List());
   }
 
+  void _writeUint16(RandomAccessFile raf, int value) {
+    var bd = ByteData(2);
+    bd.setUint16(0, value);
+    raf.writeFromSync(bd.buffer.asUint8List());
+  }
+
   var raf = File(path).openSync(mode: FileMode.write);
   try {
     raf.setPositionSync(4); //skip reserved
     _writeUint32(raf, keys.length);
     raf.setPositionSync(16); //skip offsets and values headers
     for (var k in keys) {
-      var line = utf8.encode(k + '\n');
+      var line = utf8.encode(k);
+      _writeUint16(raf, line.length);
       raf.writeFromSync(line);
     }
     // write offsets posisition

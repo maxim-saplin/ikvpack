@@ -19,6 +19,9 @@ List<String> keysStartingWith(Iterable<IkvPack> packs) {
 class IkvPack {
   final Storage? _storage;
 
+  bool _shadowKeysUsed = false;
+  bool get shadowKeysUsed => _shadowKeysUsed;
+
   IkvPack(String path, [this.keysCaseInsensitive = true])
       : _valuesInMemory = false,
         _storage = Storage(path) {
@@ -28,11 +31,23 @@ class IkvPack {
       _storage?.dispose();
       rethrow;
     }
-    if (keysCaseInsensitive) {
-      _shadowKeys = List.generate(_originalKeys.length,
-          (i) => _Triple._fixOutOfOrder(_originalKeys[i].toLowerCase()),
-          growable: false);
+
+    // check if there's need for shadow keys
+    if (!(_storage!.noUpperCaseFlag && _storage!.noOutOfOrderFlag)) {
+      if (keysCaseInsensitive) {
+        _shadowKeysUsed = true;
+        _shadowKeys = List.generate(_originalKeys.length, (i) {
+          var k = _storage!.noUpperCaseFlag
+              ? _originalKeys[i]
+              : _originalKeys[i].toLowerCase();
+          if (!_storage!.noOutOfOrderFlag) k = _fixOutOfOrder(k);
+          return k;
+        }, growable: false);
+      }
+    } else {
+      _shadowKeysUsed = false;
     }
+
     _keysReadOnly = UnmodifiableListView<String>(_originalKeys);
 
     _buildBaskets();
@@ -139,9 +154,12 @@ class IkvPack {
     if (updateProgress != null) updateProgress(10);
 
     if (keysCaseInsensitive) {
+      _shadowKeysUsed = true;
       _shadowKeys = List.generate(
           entries.length, (i) => entries[i].keyLowerCase,
           growable: false);
+    } else {
+      _shadowKeysUsed = false;
     }
 
     if (updateProgress != null) updateProgress(15);
@@ -216,10 +234,9 @@ class IkvPack {
     return fixed;
   }
 
-  // TODO test 1 key, 3 keys 'a', 'b' and 'c'
   void _buildBaskets() {
     var list = _originalKeys;
-    if (keysCaseInsensitive) list = _shadowKeys;
+    if (_shadowKeysUsed) list = _shadowKeys;
 
     var firstLetter = list[0][0];
     var index = 0;
@@ -303,7 +320,9 @@ class IkvPack {
     var list = _originalKeys;
     if (keysCaseInsensitive) {
       key = key.toLowerCase();
-      key = _Triple._fixOutOfOrder(key);
+    }
+    if (_shadowKeysUsed) {
+      key = _fixOutOfOrder(key);
       list = _shadowKeys;
     }
 
@@ -337,24 +356,30 @@ class IkvPack {
   @pragma('dart2js:tryInline')
   bool containsKey(String key) => indexOf(key) > -1;
 
-  List<String> keysStartingWith(String value,
+  List<String> keysStartingWith(String key,
       [maxResults = 100, returnShadowKeys = false]) {
     var keys = <String>[];
     var list = _originalKeys;
-    value = value.trim();
+    key = key.trim();
 
     if (keysCaseInsensitive) {
-      value = value.toLowerCase();
-      value = _Triple._fixOutOfOrder(
-          value); // TODO, add test 'имгненне' finds 'iмгненне', bug which becomes feature (allow searching BY words with RU substitues)
+      key = key.toLowerCase();
+    }
+
+    if (_shadowKeysUsed) {
+      key = _fixOutOfOrder(
+          key); // TODO, add test 'имгненне' finds 'iмгненне', bug which becomes a feature (allow searching BY words with RU substitues)
       list = _shadowKeys;
     }
 
     for (var b in _keyBaskets) {
-      if (b.firstLetter == value[0]) {
-        for (var i = b.startIndex; i <= b.endIndex; i++) {
-          if (list[i].startsWith(value)) {
-            keys.add(keysCaseInsensitive && returnShadowKeys
+      if (b.firstLetter == key[0]) {
+        var startIndex = b.startIndex;
+        var endIndex = b.endIndex;
+
+        for (var i = startIndex; i <= endIndex; i++) {
+          if (list[i].startsWith(key)) {
+            keys.add(_shadowKeysUsed && returnShadowKeys
                 ? _shadowKeys[i]
                 : _originalKeys[i]);
             if (keys.length >= maxResults) return keys;
@@ -362,6 +387,7 @@ class IkvPack {
         }
       }
     }
+
     return keys;
   }
 
@@ -373,6 +399,11 @@ class IkvPack {
     if (valuesInMemory || _storage == null) return -1;
     return _storage!.sizeBytes;
   }
+
+  bool get noOutOfOrderFlag =>
+      _storage != null ? _storage!.noOutOfOrderFlag : false;
+  bool get noUpperCaseFlag =>
+      _storage != null ? _storage!.noUpperCaseFlag : false;
 
   /// Helper methods that searches for keys in a number of packs
   /// and returns a unique set of keys. If keysCaseInsesitive, shadow
@@ -387,30 +418,53 @@ class IkvPack {
           .addAll(p.keysStartingWith(value, maxResults, p.keysCaseInsensitive));
     }
 
-    if (matches.length > 1) {
-      matches.sort();
+    List<String> distinct(List<String> list) {
+      list.sort();
       var unique = <String>[];
-      unique.add(matches[0]);
+      unique.add(list[0]);
 
-      for (var i = 0; i < matches.length; i++) {
-        if (matches[i] != unique.last) {
-          unique.add(matches[i]);
+      for (var i = 0; i < list.length; i++) {
+        if (list[i] != unique.last) {
+          unique.add(list[i]);
         }
       }
 
-      matches = unique;
+      return unique;
+    }
+
+    if (matches.length > 1) {
+      matches = distinct(matches);
 
       if (matches.length > maxResults) {
         matches = matches.sublist(0, min(maxResults, matches.length));
       }
+
+      //recover original keys
+      for (var i = 0; i < matches.length; i++) {
+        var re_continue = false;
+        for (var p in packs) {
+          if (p.shadowKeysUsed) {
+            var index = p.indexOf(matches[i]);
+            if (index > 0) {
+              matches[i] = p._originalKeys[index];
+              re_continue = true;
+              continue;
+            }
+          }
+        }
+        if (re_continue) continue;
+      }
     }
 
-    return matches;
+    return distinct(matches);
   }
 }
 
 abstract class StorageBase {
   StorageBase(String path);
+
+  bool get noOutOfOrderFlag;
+  bool get noUpperCaseFlag;
 
   List<String> readSortedKeys();
   List<int> value(String key);
@@ -438,35 +492,36 @@ class _Triple {
   final String keyLowerCase;
   final String value;
 
-  // Out of order Cyrylic chars
-  // я - 1103
-  //
-  // е - 1077 (й 1078)
-  // ё - 1105  <---
-  //
-  // з - 1079 (и 1080)
-  // і - 1110  <---
-  //
-  // у - 1091
-  // ў - 1118  <---
-  // ѝ/1117, ќ/1116, ћ/1115, њ/1114, љ/1113, ј/1112, ї/1111, і/1110, ѕ/1109,
-  // є/1108, ѓ/1107, ђ/1106, ё/1105, ѐ/1104
-  // http://www.ltg.ed.ac.uk/~richard/utf-8.cgi?input=1103&mode=decimal
-
-  // Belarusian alphabet
-  // АаБбВвГгДдЕеЁёЖжЗзІіЙйКкЛлМмНнОоПпРрСсТтУуЎўФфХхЦцЧчШшЫыЬьЭэЮюЯя
-  // АБВГДЕЁЖЗІЙКЛМНОПРСТУЎФХЦЧШЫЬЭЮЯ
-  // абвгдеёжзійклмнопрстуўфхцчшыьэюя
-  static String _fixOutOfOrder(String value) {
-    value =
-        value.replaceAll('ё', 'е').replaceAll('і', 'и').replaceAll('ў', 'у');
-    return value;
-  }
-
   _Triple(this.key, this.value)
       : keyLowerCase = _fixOutOfOrder(key.toLowerCase());
 
   _Triple.noLowerCase(this.key, this.value) : keyLowerCase = '';
+}
+
+// Out of order Cyrylic chars
+// я - 1103
+//
+// е - 1077 (й 1078)
+// ё - 1105  <---
+//
+// з - 1079 (и 1080)
+// і - 1110  <---
+//
+// у - 1091
+// ў - 1118  <---
+// ѝ/1117, ќ/1116, ћ/1115, њ/1114, љ/1113, ј/1112, ї/1111, і/1110, ѕ/1109,
+// є/1108, ѓ/1107, ђ/1106, ё/1105, ѐ/1104
+// http://www.ltg.ed.ac.uk/~richard/utf-8.cgi?input=1103&mode=decimal
+
+// Belarusian alphabet
+// АаБбВвГгДдЕеЁёЖжЗзІіЙйКкЛлМмНнОоПпРрСсТтУуЎўФфХхЦцЧчШшЫыЬьЭэЮюЯя
+// АБВГДЕЁЖЗІЙКЛМНОПРСТУЎФХЦЧШЫЬЭЮЯ
+// абвгдеёжзійклмнопрстуўфхцчшыьэюя
+@pragma('vm:prefer-inline')
+@pragma('dart2js:tryInline')
+String _fixOutOfOrder(String value) {
+  value = value.replaceAll('ё', 'е').replaceAll('і', 'и').replaceAll('ў', 'у');
+  return value;
 }
 
 class _IsolateParams {
