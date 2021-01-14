@@ -281,6 +281,20 @@ void main() async {
       expect(v, '<div>вспахать</div>');
     });
 
+    test('IkvPack error while loading in isolate is properly handlede',
+        () async {
+      var errorHandeled = false;
+
+      try {
+        await IkvPack.loadInIsolate('test2/testIkv.dat', true);
+        expect('Never reached', 'Reached');
+      } catch (_) {
+        errorHandeled = true;
+      }
+
+      expect(errorHandeled, true);
+    });
+
     test('IkvPacks can be loaded in isolate pool', () async {
       var pool = IsolatePool(4);
       await pool.start();

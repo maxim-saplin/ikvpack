@@ -163,7 +163,6 @@ class Storage implements StorageBase {
   }
 
   @override
-  // TODO: implement sizeBytes
   int get sizeBytes => _file != null ? _file!.lengthSync() : -1;
 }
 

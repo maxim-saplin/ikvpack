@@ -84,9 +84,13 @@ class IkvPack {
       [keysCaseInsensitive = true]) async {
     var completer = Completer<IkvPack>();
 
-    var ikv = await pool.scheduleJob(IkvPooledJob(path, keysCaseInsensitive));
-    ikv._storage?.reopenFile();
-    completer.complete(ikv);
+    try {
+      var ikv = await pool.scheduleJob(IkvPooledJob(path, keysCaseInsensitive));
+      ikv._storage?.reopenFile();
+      completer.complete(ikv);
+    } catch (e) {
+      completer.completeError(e);
+    }
 
     return completer.future;
   }
@@ -329,17 +333,23 @@ class IkvPack {
 
     var fl = key[0].codeUnits[0];
 
+    //var it = 0;
+
     for (var b in _keyBaskets) {
       if (b.firstLetter == fl) {
         var l = b.startIndex;
         var r = b.endIndex;
         while (l <= r) {
+          //it++;
           var m = (l + (r - l) / 2).round();
 
           var res = key.compareTo(list[m]);
 
           // Check if x is present at mid
-          if (res == 0) return m;
+          if (res == 0) {
+            //print('  --it ${it}');
+            return m;
+          }
 
           if (res > 0) {
             // If x greater, ignore left half
@@ -352,6 +362,7 @@ class IkvPack {
       }
     }
 
+    //print('  --it ${it}');
     return -1;
   }
 
@@ -359,29 +370,32 @@ class IkvPack {
   @pragma('dart2js:tryInline')
   bool containsKey(String key) => indexOf(key) > -1;
 
-  int _narrowDownFirst(String key, _KeyBasket b, List<String> list) {
-    var l = b.startIndex;
-    var r = b.endIndex;
+  // int _narrowDownFirst(String key, _KeyBasket b, List<String> list) {
+  //   var l = b.startIndex;
+  //   var r = b.endIndex;
 
-    while (l <= r) {
-      var m = (l + (r - l) / 2).round();
+  //   while (l <= r) {
+  //     var m = (l + (r - l) / 2).round();
 
-      var res = key.compareTo(list[m]);
+  //     var res = key.compareTo(list[m]);
 
-      // Check if x is present at mid
-      if (res == 0) break;
+  //     // Check if x is present at mid
+  //     if (res == 0) break;
 
-      if (res > 0) {
-        // If x greater, ignore left half
-        l = m + 1;
-      } else {
-        // If x is smaller, ignore right half
-        r = m - 1;
-      }
-    }
+  //     if (res > 0) {
+  //       // If x greater, ignore left half
+  //       l = m + 1;
+  //     } else {
+  //       // If x is smaller, ignore right half
+  //       r = m - 1;
+  //     }
+  //   }
 
-    return l < r ? l : r;
-  }
+  //   return l < r ? l : r;
+  // }
+
+// Used by consolidated lookup to recover original keys
+  int _kswi = 0;
 
   List<String> keysStartingWith(String key,
       [int maxResults = 100, bool returnShadowKeys = false]) {
@@ -396,18 +410,20 @@ class IkvPack {
     }
 
     if (_shadowKeysUsed) {
-      key = _fixOutOfOrder(
-          key); // TODO, add test 'имгненне' finds 'iмгненне', bug which becomes a feature (allow searching BY words with RU substitues)
+      key = _fixOutOfOrder(key);
       list = _shadowKeys;
     }
 
     var fl = key[0].codeUnits[0];
+    _kswi = -1;
 
     for (var b in _keyBaskets) {
       if (b.firstLetter == fl) {
         var startIndex = b.startIndex;
         var endIndex = b.endIndex;
+
         if (key.length == 1) {
+          _kswi = startIndex;
           return (_shadowKeysUsed && returnShadowKeys
                   ? _shadowKeys
                   : _originalKeys)
@@ -415,17 +431,22 @@ class IkvPack {
         } else {
           //startIndex = _narrowDownFirst(key, b, list);
 
-          for (var i = startIndex; i <= endIndex; i++) {
+          var i = startIndex;
+          for (i; i <= endIndex; i++) {
             if (list[i].startsWith(key)) {
+              if (_kswi == -1) _kswi = i;
               keys.add(_shadowKeysUsed && returnShadowKeys
                   ? _shadowKeys[i]
                   : _originalKeys[i]);
               if (keys.length >= maxResults) {
+                _kswi = i - keys.length + 1;
                 return keys;
               }
             }
           }
         }
+
+        break;
       }
     }
 
@@ -452,54 +473,46 @@ class IkvPack {
   static List<String> consolidatedKeysStartingWith(
       Iterable<IkvPack> packs, String value,
       [int maxResults = 100]) {
-    var sw = Stopwatch();
-    sw.start();
+    // var sw = Stopwatch();
+    // sw.start();
     var matches = <String>[];
 
     var max2 = maxResults;
+    var tuples = <Tupple<String, String>>[];
 
     for (var p in packs) {
-      matches.addAll(p.keysStartingWith(value, max2, p.keysCaseInsensitive));
-      if (matches.length > maxResults) max2 = (maxResults / 2).floor();
-      if (matches.length > 3 * maxResults) max2 = (maxResults / 2).floor();
+      var i = 0;
+      tuples.addAll(
+          p.keysStartingWith(value, max2, p.keysCaseInsensitive).map((e) {
+        return Tupple(e, p._originalKeys[p._kswi + i++]);
+      }));
+      if (tuples.length > maxResults) max2 = (maxResults / 2).floor();
+      if (tuples.length > 3 * maxResults) max2 = (maxResults / 2).floor();
     }
 
-    print(
-        '|Lookup matches ${matches.length}, ${sw.elapsedMicroseconds} microseconds');
-    sw.reset();
+    // print(
+    //     '|Lookup matches ${tuples.length}, ${sw.elapsedMicroseconds} microseconds');
+    // sw.reset();
 
-    if (matches.length > 1) {
-      matches = distinct(matches);
-      print(
-          '|Distinct ${matches.length}, ${sw.elapsedMicroseconds} microseconds');
-      sw.reset();
+    if (tuples.length > 1) {
+      tuples = _distinct(tuples);
+      // print(
+      //     '|Distinct ${tuples.length}, ${sw.elapsedMicroseconds} microseconds');
+      // sw.reset();
 
-      if (matches.length > maxResults) {
-        matches = matches.sublist(0, min(maxResults, matches.length));
+      if (tuples.length > maxResults) {
+        tuples = tuples.sublist(0, min(maxResults, tuples.length));
       }
 
-      print(
-          '|Sublist ${matches.length}, ${sw.elapsedMicroseconds} microseconds');
-      sw.reset();
+      // print(
+      //     '|Sublist ${matches.length}, ${sw.elapsedMicroseconds} microseconds');
+      // sw.reset();
 
       //recover original keys
-      for (var i = 0; i < matches.length; i++) {
-        var re_continue = false;
-        for (var p in packs) {
-          if (p.shadowKeysUsed) {
-            var index = p.indexOf(matches[i]);
-            if (index > -1) {
-              matches[i] = p._originalKeys[index];
-              re_continue = true;
-              continue;
-            }
-          }
-        }
-        if (re_continue) continue;
-      }
+      matches = tuples.map((e) => e.item2).toList();
 
-      print('|Originals recovered, ${sw.elapsedMicroseconds} microseconds');
-      sw.reset();
+      // print('|Originals recovered, ${sw.elapsedMicroseconds} microseconds');
+      // sw.reset();
     }
 
     // 82 dics, я being moved by Я
@@ -511,14 +524,21 @@ class IkvPack {
   }
 }
 
-List<String> distinct(List<String> list) {
+class Tupple<T1, T2> {
+  final T1 item1;
+  final T2 item2;
+
+  Tupple(this.item1, this.item2);
+}
+
+List<Tupple<String, String>> _distinct(List<Tupple<String, String>> list) {
   if (list.isEmpty) return list;
-  list.sort();
-  var unique = <String>[];
+  list.sort((a, b) => a.item1.compareTo(b.item1));
+  var unique = <Tupple<String, String>>[];
   unique.add(list[0]);
 
   for (var i = 0; i < list.length; i++) {
-    if (list[i] != unique.last) {
+    if (list[i].item1 != unique.last.item1) {
       unique.add(list[i]);
     }
   }
