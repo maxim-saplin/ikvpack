@@ -68,14 +68,13 @@ class Storage implements StorageBase {
 
     if (_disposed) throw 'Storage object was disposed, cant use it';
     _flags = _readUint32(f, Endian.big);
-    //f.setPositionSync(4); // skip reserved
     var length = _readUint32(f);
     var offsetsOffset = _readUint32(f);
     var valuesOffset = _readUint32(f);
     var keys = <String>[];
 
     if (valuesOffset - offsetsOffset != length * 8) {
-      throw 'Invalid file, number of ofset entires doesn\'t match the length';
+      throw 'Invalid file, number of offset entires doesn\'t match the length';
     }
 
     if (f.lengthSync() <= offsetsOffset) {
