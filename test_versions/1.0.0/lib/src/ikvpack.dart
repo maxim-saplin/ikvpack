@@ -5,7 +5,7 @@ import 'dart:io';
 import 'dart:isolate';
 import 'dart:math';
 import 'dart:typed_data';
-import 'package:ikvpack/ikvpack.dart';
+import 'package:ikvpack_100/ikvpack.dart';
 
 import 'storage_vm.dart'
     if (dart.library.io) 'storage_vm.dart'
@@ -263,17 +263,9 @@ class IkvPack {
         .add(_KeyBasket(firstLetter.codeUnits[0], index, list.length - 1));
   }
 
-  /// Serialize object to a given file (on VM) or IndexedDB (in Web)
+  /// Serilized object to given file on VM and IndexedDB in Web
   void saveTo(String path) {
     saveToPath(path, _originalKeys, _values);
-  }
-
-  Stats? getStats() {
-    try {
-      return _storage!.getStats();
-    } catch (_) {
-      return null;
-    }
   }
 
   int get length => _originalKeys.length;
@@ -554,22 +546,6 @@ List<Tupple<String, String>> _distinct(List<Tupple<String, String>> list) {
   return unique;
 }
 
-class Stats {
-  final int keysNumber;
-  final int distinctKeysNumber;
-  final int keysBytes;
-  final int valuesBytes;
-  final int keysTotalChars;
-
-  Stats(this.keysNumber, this.distinctKeysNumber, this.keysBytes,
-      this.valuesBytes, this.keysTotalChars);
-
-  double get avgKeyLength => keysTotalChars / keysNumber;
-  double get avgKeyBytes => keysBytes / keysNumber;
-  double get avgCharBytes => keysBytes / keysTotalChars;
-  double get avgValueBytes => valuesBytes / keysNumber;
-}
-
 abstract class StorageBase {
   StorageBase(String path);
 
@@ -587,8 +563,6 @@ abstract class StorageBase {
   // closing file is done in spawned isolate and reopening is done in main isolate
   void closeFile();
   void reopenFile();
-
-  Stats getStats();
 }
 
 class _KeyBasket {
@@ -597,9 +571,6 @@ class _KeyBasket {
   final int endIndex;
 
   _KeyBasket(this.firstLetter, this.startIndex, this.endIndex);
-
-  String get firstLetterString => String.fromCharCode(firstLetter);
-  int get length => endIndex - startIndex;
 }
 
 class _Triple {
@@ -612,13 +583,6 @@ class _Triple {
 
   _Triple.noLowerCase(this.key, this.value) : keyLowerCase = '';
 }
-
-final _c1 = 'ё'.codeUnits[0];
-final _cc1 = 'е'.codeUnits[0];
-final _c2 = 'і'.codeUnits[0];
-final _cc2 = 'и'.codeUnits[0];
-final _c3 = 'ў'.codeUnits[0];
-final _cc3 = 'у'.codeUnits[0];
 
 // Out of order Cyrylic chars
 // я - 1103
@@ -642,22 +606,7 @@ final _cc3 = 'у'.codeUnits[0];
 @pragma('vm:prefer-inline')
 @pragma('dart2js:tryInline')
 String _fixOutOfOrder(String value) {
-  //value = value.replaceAll('ё', 'е').replaceAll('і', 'и').replaceAll('ў', 'у');
-
-  var cus = List<int>.generate(value.length, (index) {
-    var i = value.codeUnitAt(index);
-    if (i == _c1) {
-      return _cc1;
-    } else if (i == _c2) {
-      return _cc2;
-    } else if (i == _c3) {
-      return _cc3;
-    } else {
-      return i;
-    }
-  }, growable: false);
-  value = String.fromCharCodes(cus);
-
+  value = value.replaceAll('ё', 'е').replaceAll('і', 'и').replaceAll('ў', 'у');
   return value;
 }
 

@@ -250,7 +250,6 @@ void main() async {
   });
 
   // Test file is sorted as case insensitive and can't be opened as case insensitive
-  // TODO - as flag to file to tell if file was created as sensitive or not
   // group('File tests, case-sensitive', () {
   //   _ikv = IkvPack('test/testIkv.dat', false);
 

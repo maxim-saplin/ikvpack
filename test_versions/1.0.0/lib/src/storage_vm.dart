@@ -41,7 +41,7 @@ class Storage implements StorageBase {
   // in a loop with 2mln iterations to very infrequent operastions, e.g. 0,1ms of value extraction
   // delay won't be noticed when looking up a single value (which is the more relevant case). Also given that all values are dcompresed
   // the delayed extraction of offset/length won't be comparable to the ammount of time needed by zlib
-  ByteData? _valuesOffsets;
+  ByteData? _offsets;
 
   @override
   void dispose() {
@@ -52,9 +52,6 @@ class Storage implements StorageBase {
   final String path;
 
   int _flags = 0;
-  int _length = -1;
-  int _offsetsOffset = -1;
-  int _valuesOffset = -1;
 
   @override
   bool get noOutOfOrderFlag => (_flags & 0x80000000) >> 31 == 1;
@@ -64,83 +61,62 @@ class Storage implements StorageBase {
   @override
   List<String> readSortedKeys() {
     // var sw = Stopwatch();
-    // var sw2 = Stopwatch();
-    // var sw3 = Stopwatch();
-    // sw3.start();
     // sw.start();
     // print('Reading ikvpack keys and value offsets...');
 
     var f = _file as RandomAccessFile;
-    f.setPositionSync(0);
 
     if (_disposed) throw 'Storage object was disposed, cant use it';
     _flags = _readUint32(f, Endian.big);
-    _length = _readUint32(f);
-    _offsetsOffset = _readUint32(f);
-    _valuesOffset = _readUint32(f);
+    var length = _readUint32(f);
+    var offsetsOffset = _readUint32(f);
+    var valuesOffset = _readUint32(f);
     var keys = <String>[];
 
-    if (_valuesOffset - _offsetsOffset != _length * 8) {
+    if (valuesOffset - offsetsOffset != length * 8) {
       throw 'Invalid file, number of offset entires doesn\'t match the length';
     }
 
-    if (f.lengthSync() <= _offsetsOffset) {
+    if (f.lengthSync() <= offsetsOffset) {
       throw 'Invalid file, file to short (offsetsOffset)';
     }
 
-    if (f.lengthSync() <= _valuesOffset) {
+    if (f.lengthSync() <= valuesOffset) {
       throw 'Invalid file, file to short (valuesOffset)';
     }
 
-    // sw.stop();
-    // print('Init done ${sw.elapsedMicroseconds}');
-    // sw.reset();
-    // sw.start();
-
     // tried reading file byte after byte, very slow, OS doesnt seem to read ahead and cache future file bytes
-    var bytes = f.readSync(_offsetsOffset - f.positionSync()).buffer;
+    var bytes = f.readSync(offsetsOffset - f.positionSync()).buffer;
     var bd = bytes.asByteData();
     var prev = 0;
 
-    // sw.stop();
-    // print('Keys read ${sw.elapsedMicroseconds}');
-    // sw.reset();
-    // sw.start();
-
-    //var decoder = CustUtf8Decoder(true);
+    // reading keys
     var decoder = Utf8Decoder(allowMalformed: true);
-
-    keys = List.generate(_length, (index) {
+    keys = List.generate(length, (index) {
       var length = bd.getUint16(prev);
       prev += 2;
-      var view = Uint8List.view(bytes, prev, length);
-      var key = decoder.convert(view);
-
-      //var key = dec.decodeGeneral(view, 0, length, true);
-
+      var key = decoder.convert(Uint8List.view(bytes, prev, length));
       prev += length;
 
       return key;
-    }, growable: false);
+    });
 
-    // sw.stop();
-    // print('Keys converted from UTF8 ${sw.elapsedMicroseconds}');
-    // print('UTF8 converter time ${sw2.elapsedMicroseconds}');
-    // sw.reset();
-    // sw.start();
-
-    //print('Creating view ${sw.elapsedMilliseconds}');
-
-    if (keys.length != _length) {
+    if (keys.length != length) {
       throw 'Invalid file, number of keys read doesnt match number in headers';
     }
 
-    _valuesOffsets = f.readSync(_length * 8).buffer.asByteData();
+    //print('Keys read: ${sw.elapsedMilliseconds}ms');
 
-    // sw.stop();
-    // sw3.stop();
-    // print('Offsets read ${sw.elapsedMicroseconds}');
-    // print('Total read keys ${sw3.elapsedMicroseconds}');
+    // reading value offsets
+
+    //var bd = f.readSync(length * 8).buffer.asByteData();
+
+    // _offsets = List.generate(length, (i) {
+    //   // var pair = bd.getInt64(i * 8, Endian.little);
+    //   // return _OffsetLength(pair >> 32, pair & 0xffffffff);
+    //   return _OffsetLength(bd.getUint32(i * 8), bd.getUint32(i * 8 + 4));
+    // });
+    _offsets = f.readSync(length * 8).buffer.asByteData();
 
     return keys;
   }
@@ -165,8 +141,8 @@ class Storage implements StorageBase {
   @override
   List<int> valueAt(int index) {
     //var o = _offsets[index];
-    var offset = _valuesOffsets!.getUint32(index * 8);
-    var length = _valuesOffsets!.getUint32(index * 8 + 4);
+    var offset = _offsets!.getUint32(index * 8);
+    var length = _offsets!.getUint32(index * 8 + 4);
     var f = _file as RandomAccessFile;
     f.setPositionSync(offset);
     var value = f.readSync(length);
@@ -186,39 +162,6 @@ class Storage implements StorageBase {
 
   @override
   int get sizeBytes => _file != null ? _file!.lengthSync() : -1;
-
-  @override
-  Stats getStats() {
-    var keys = readSortedKeys();
-
-    var keysNumber = _length;
-    var keysBytes = _offsetsOffset - 16 - _length * 2;
-    //var altKeysBytes = 0;
-    var valuesBytes = sizeBytes - _valuesOffset;
-    var keysTotalChars = keys.fold<int>(
-        0, (previousValue, element) => previousValue + element.length);
-
-    var distinctKeysNumber = 1;
-
-    var prev = keys[0];
-    for (var i = 1; i < keys.length; i++) {
-      if (prev != keys[i]) {
-        distinctKeysNumber++;
-        prev = keys[i];
-      }
-      // altKeysBytes += keys[i].codeUnits.fold(0, (previousValue, element) {
-      //   return previousValue +
-      //       (element > 127
-      //           ? (element > 2047 ? (element > 65535 ? 4 : 3) : 2)
-      //           : 1);
-      // });
-    }
-
-    var stats = Stats(
-        keysNumber, distinctKeysNumber, keysBytes, valuesBytes, keysTotalChars);
-
-    return stats;
-  }
 }
 
 void deleteFromPath(String path) {
