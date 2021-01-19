@@ -151,14 +151,6 @@ class Storage implements StorageBase {
     throw UnimplementedError();
   }
 
-  int _readUint32(RandomAccessFile raf, [Endian endian = Endian.big]) {
-    var int32 = Uint8List(4);
-    if (raf.readIntoSync(int32) <= 0) return -1;
-    var bd = ByteData.sublistView(int32);
-    var val = bd.getUint32(0, endian);
-    return val;
-  }
-
   @override
   bool get useIndexToGetValue => true;
 
@@ -225,19 +217,45 @@ void deleteFromPath(String path) {
   File(path).deleteSync();
 }
 
+Future<IkvInfo> storageGetInfo(String path) async {
+  var f = File(path);
+  var raf = await f.open();
+  await raf.setPosition(4);
+  var length = await _readUint32Async(raf);
+  await raf.close();
+  return IkvInfo(await f.length(), length);
+}
+
+int _readUint32(RandomAccessFile raf, [Endian endian = Endian.big]) {
+  var int32 = Uint8List(4);
+  if (raf.readIntoSync(int32) <= 0) return -1;
+  var bd = ByteData.sublistView(int32);
+  var val = bd.getUint32(0, endian);
+  return val;
+}
+
+Future<int> _readUint32Async(RandomAccessFile raf,
+    [Endian endian = Endian.big]) async {
+  var int32 = Uint8List(4);
+  if (await raf.readInto(int32) <= 0) return -1;
+  var bd = ByteData.sublistView(int32);
+  var val = bd.getUint32(0, endian);
+  return val;
+}
+
+void _writeUint32(RandomAccessFile raf, int value) {
+  var bd = ByteData(4);
+  bd.setUint32(0, value);
+  raf.writeFromSync(bd.buffer.asUint8List());
+}
+
+void _writeUint16(RandomAccessFile raf, int value) {
+  var bd = ByteData(2);
+  bd.setUint16(0, value);
+  raf.writeFromSync(bd.buffer.asUint8List());
+}
+
 void saveToPath(String path, List<String> keys, List<List<int>> values) {
-  void _writeUint32(RandomAccessFile raf, int value) {
-    var bd = ByteData(4);
-    bd.setUint32(0, value);
-    raf.writeFromSync(bd.buffer.asUint8List());
-  }
-
-  void _writeUint16(RandomAccessFile raf, int value) {
-    var bd = ByteData(2);
-    bd.setUint16(0, value);
-    raf.writeFromSync(bd.buffer.asUint8List());
-  }
-
   var raf = File(path).openSync(mode: FileMode.write);
   try {
     raf.setPositionSync(4); //skip reserved

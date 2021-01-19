@@ -321,6 +321,12 @@ void main() async {
       expect(IkvPack('test/testIkv.dat').sizeBytes, 263927);
     });
 
+    test('IkvInfo is properly returned', () async {
+      var info = await IkvPack.getInfo('test/testIkv.dat');
+      expect(info.sizeBytes, 263927);
+      expect(info.length, 1436);
+    });
+
     test('File can be deleted', () {
       var m = <String, String>{'a': 'aaa', 'b': 'bbb', 'c': 'ccc'};
       var ik = IkvPack.fromMap(m);
@@ -373,7 +379,7 @@ void main() async {
       expect(keys.length, 10);
     },
         skip:
-            true); // current;y handling case sensitive keys is not a priority, there're test fails
+            true); // current;y handling case sensitive keys is not a priority, the test fails
 
     test('Flags are properly read from file', () {
       var ikv00 = IkvPack('test/testIkv.dat');

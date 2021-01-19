@@ -25,12 +25,18 @@ class IkvPack {
   IkvPack(String path, [this.keysCaseInsensitive = true])
       : _valuesInMemory = false,
         _storage = Storage(path) {
+    var sw = Stopwatch();
+    sw.start();
     try {
       _originalKeys = _storage!.readSortedKeys();
     } catch (e) {
       _storage?.dispose();
       rethrow;
     }
+    sw.stop();
+    print('File load ${sw.elapsedMilliseconds}');
+    sw.reset();
+    sw.start();
 
     // check if there's need for shadow keys
     if (!(_storage!.noUpperCaseFlag && _storage!.noOutOfOrderFlag)) {
@@ -48,9 +54,17 @@ class IkvPack {
       _shadowKeysUsed = false;
     }
 
+    sw.stop();
+    print('Shadow keys ${sw.elapsedMilliseconds}');
+    sw.reset();
+    sw.start();
+
     _keysReadOnly = UnmodifiableListView<String>(_originalKeys);
 
     _buildBaskets();
+
+    sw.stop();
+    print('Baskets ${sw.elapsedMilliseconds}');
   }
 
   static Future<IkvPack> loadInIsolate(String path,
@@ -242,25 +256,24 @@ class IkvPack {
     var list = _originalKeys;
     if (_shadowKeysUsed) list = _shadowKeys;
 
-    var firstLetter = list[0][0];
+    var firstLetter = list[0][0].codeUnits[0];
     var index = 0;
 
     if (list.length == 1) {
-      _keyBaskets.add(_KeyBasket(firstLetter.codeUnits[0], index, index));
+      _keyBaskets.add(_KeyBasket(firstLetter, index, index));
       return;
     }
 
     for (var i = 1; i < list.length; i++) {
-      var newFirstLetter = list[i][0];
+      var newFirstLetter = list[i][0].codeUnits[0];
       if (newFirstLetter != firstLetter) {
-        _keyBaskets.add(_KeyBasket(firstLetter.codeUnits[0], index, i - 1));
+        _keyBaskets.add(_KeyBasket(firstLetter, index, i - 1));
         firstLetter = newFirstLetter;
         index = i;
       }
     }
 
-    _keyBaskets
-        .add(_KeyBasket(firstLetter.codeUnits[0], index, list.length - 1));
+    _keyBaskets.add(_KeyBasket(firstLetter, index, list.length - 1));
   }
 
   /// Serialize object to a given file (on VM) or IndexedDB (in Web)
@@ -268,6 +281,7 @@ class IkvPack {
     saveToPath(path, _originalKeys, _values);
   }
 
+  /// Can be slow
   Stats? getStats() {
     try {
       return _storage!.getStats();
@@ -470,6 +484,11 @@ class IkvPack {
     return _storage!.sizeBytes;
   }
 
+  /// Get Ikv size and length without expensively loading it into memory
+  static Future<IkvInfo> getInfo(String path) async {
+    return storageGetInfo(path);
+  }
+
   bool get noOutOfOrderFlag =>
       _storage != null ? _storage!.noOutOfOrderFlag : false;
   bool get noUpperCaseFlag =>
@@ -554,6 +573,12 @@ List<Tupple<String, String>> _distinct(List<Tupple<String, String>> list) {
   return unique;
 }
 
+class IkvInfo {
+  final int sizeBytes;
+  final int length;
+  IkvInfo(this.sizeBytes, this.length);
+}
+
 class Stats {
   final int keysNumber;
   final int distinctKeysNumber;
@@ -580,6 +605,7 @@ abstract class StorageBase {
   List<int> value(String key);
   List<int> valueAt(int index);
   int get sizeBytes;
+  Stats getStats();
   void dispose();
   bool get useIndexToGetValue;
   // the bellow 2 methods are workarounds for passing Storage across isolates,
@@ -587,8 +613,6 @@ abstract class StorageBase {
   // closing file is done in spawned isolate and reopening is done in main isolate
   void closeFile();
   void reopenFile();
-
-  Stats getStats();
 }
 
 class _KeyBasket {
@@ -644,19 +668,24 @@ final _cc3 = 'у'.codeUnits[0];
 String _fixOutOfOrder(String value) {
   //value = value.replaceAll('ё', 'е').replaceAll('і', 'и').replaceAll('ў', 'у');
 
-  var cus = List<int>.generate(value.length, (index) {
-    var i = value.codeUnitAt(index);
-    if (i == _c1) {
-      return _cc1;
-    } else if (i == _c2) {
-      return _cc2;
-    } else if (i == _c3) {
-      return _cc3;
-    } else {
-      return i;
+  var cus = Uint16List.fromList(value.codeUnits);
+  var changed = false;
+
+  for (var i = 0; i < value.length; i++) {
+    if (cus[i] == _c1) {
+      cus[i] = _cc1;
+      changed = true;
+    } else if (cus[i] == _c2) {
+      cus[i] = _cc2;
+      changed = true;
+    } else if (cus[i] == _c3) {
+      cus[i] = _cc3;
+      changed = true;
     }
-  }, growable: false);
-  value = String.fromCharCodes(cus);
+  }
+  if (changed) {
+    return String.fromCharCodes(cus);
+  }
 
   return value;
 }

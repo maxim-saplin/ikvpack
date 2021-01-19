@@ -7,5 +7,5 @@
 /// Copyright (c) 2020 Maxim Saplin
 library ikvpack;
 
-export 'src/ikvpack.dart' show IkvPack;
+export 'src/ikvpack.dart' show IkvPack, IkvInfo;
 export 'src/isolate_helpers.dart';

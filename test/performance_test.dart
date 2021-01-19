@@ -11,48 +11,43 @@ const enFile = 'test/performance_data/EN_RU Multitran vol.2.dikt';
 
 void main() async {
   group('Real file tests', () {
-    test('Current version not slower than 1.0.0', () {
+    int loadCurrent(String path, bool keysCaseInsensitive) {
+      var ikv = IkvPack(path, keysCaseInsensitive);
+      return ikv.length;
+    }
+
+    int loadIkv100(String path, bool keysCaseInsensitive) {
+      var ikv = ikv100.IkvPack(path, keysCaseInsensitive);
+      return ikv.length;
+    }
+
+    test('Case-Insensitive, Current version not slower than 1.0.0', () {
       // var ikv = IkvPack(ruFile, false);
       // var stats = ikv.getStats();
       // ikv = IkvPack(enFile, false);
       // stats = ikv.getStats();
 
-      int loadCurrent(String path, bool keysCaseInsensitive) {
-        var ikv = IkvPack(path, keysCaseInsensitive);
-        return ikv.length;
-      }
+      var currentRuInsense = _benchmark(() => loadCurrent(ruFile, true), 6, 1);
+      var ikv100RuInsense = _benchmark(() => loadIkv100(ruFile, true), 6, 1);
+      var currentEnInsense = _benchmark(() => loadCurrent(enFile, true), 6, 1);
+      var ikv100EnInsense = _benchmark(() => loadIkv100(enFile, true), 6, 1);
 
-      int loadIkv100(String path, bool keysCaseInsensitive) {
-        var ikv = ikv100.IkvPack(path, keysCaseInsensitive);
-        return ikv.length;
-      }
-
-      // var currentRuSense = _benchmark(() => loadCurrent(ruFile, false), 1, 2);
-      // //var currentEnSense = _benchmark(() => loadCurrent(enFile, false), 1, 2);
-
-      // currentRuSense.prnt('CURR RU, CASE-SENS', true);
-      // //currentEnSense.prnt('CURR EN, CASE-SENS', true);
-
-      // var currentRuInsense = _benchmark(() => loadCurrent(ruFile, true), 6, 1);
-      // var ikv100RuInsense = _benchmark(() => loadIkv100(ruFile, true), 6, 1);
-      // var currentEnInsense = _benchmark(() => loadCurrent(enFile, true), 6, 1);
-      // var ikv100EnInsense = _benchmark(() => loadIkv100(enFile, true), 6, 1);
-
+      currentRuInsense.prnt('CURR RU, CASE-INSE', true);
+      ikv100RuInsense.prnt('I100 RU, CASE-INSE', true);
+      currentEnInsense.prnt('CURR EN, CASE-INSE', true);
+      ikv100EnInsense.prnt('I100 EN, CASE-INSE', true);
+    }, skip: false);
+    test('Case-Sensitive, Current version not slower than 1.0.0', () {
       var currentRuSense = _benchmark(() => loadCurrent(ruFile, false), 6, 1);
       var ikv100RuSense = _benchmark(() => loadIkv100(ruFile, false), 6, 1);
       var currentEnSense = _benchmark(() => loadCurrent(enFile, false), 6, 1);
       var ikv100EnSense = _benchmark(() => loadIkv100(enFile, false), 6, 1);
 
-      // currentRuInsense.prnt('CURR RU, CASE-INSE', true);
-      // ikv100RuInsense.prnt('I100 RU, CASE-INSE', true);
-      // currentEnInsense.prnt('CURR EN, CASE-INSE', true);
-      // ikv100EnInsense.prnt('I100 EN, CASE-INSE', true);
-
       currentRuSense.prnt('CURR RU, CASE-SENS', true);
       ikv100RuSense.prnt('I100 RU, CASE-SENS', true);
       currentEnSense.prnt('CURR EN, CASE-SENS', true);
       ikv100EnSense.prnt('I100 EN, CASE-SENS', true);
-    }, skip: true);
+    }, skip: false);
   });
 
   group('Trying out certain patterns for performance', () {
@@ -77,14 +72,15 @@ void main() async {
         return kk;
       }
 
+      var c1 = 'ё'.codeUnits[0];
+      var cc1 = 'е'.codeUnits[0];
+      var c2 = 'і'.codeUnits[0];
+      var cc2 = 'и'.codeUnits[0];
+      var c3 = 'ў'.codeUnits[0];
+      var cc3 = 'у'.codeUnits[0];
+
       List<String> codeUnits() {
         var kk = <String>[];
-        var c1 = 'ё'.codeUnits[0];
-        var cc1 = 'е'.codeUnits[0];
-        var c2 = 'і'.codeUnits[0];
-        var cc2 = 'и'.codeUnits[0];
-        var c3 = 'ў'.codeUnits[0];
-        var cc3 = 'у'.codeUnits[0];
         for (var k in keys) {
           var cus = <int>[];
           for (var i in k.codeUnits) {
@@ -105,13 +101,6 @@ void main() async {
       }
 
       List<String> codeUnits2() {
-        var c1 = 'ё'.codeUnits[0];
-        var cc1 = 'е'.codeUnits[0];
-        var c2 = 'і'.codeUnits[0];
-        var cc2 = 'и'.codeUnits[0];
-        var c3 = 'ў'.codeUnits[0];
-        var cc3 = 'у'.codeUnits[0];
-
         var kk = List<String>.generate(keys.length, (i) {
           var k = keys[i];
           var cus = List<int>.generate(k.length, (index) {
@@ -132,13 +121,100 @@ void main() async {
         return kk;
       }
 
+      List<String> uint16() {
+        var kk = List<String>.generate(keys.length, (i) {
+          var k = keys[i];
+          var cus = Uint16List(k.length);
+
+          for (var i = 0; i < k.length; i++) {
+            if (k.codeUnits[i] == c1) {
+              cus[i] = cc1;
+            } else if (k.codeUnits[i] == c2) {
+              cus[i] = cc2;
+            } else if (k.codeUnits[i] == c3) {
+              cus[i] = cc3;
+            } else {
+              cus[i] = k.codeUnits[i];
+            }
+          }
+
+          var s = String.fromCharCodes(cus);
+          return s;
+        }, growable: false);
+        return kk;
+      }
+
+      List<String> uint16uint16() {
+        var kk = List<String>.generate(keys.length, (i) {
+          var k = keys[i];
+          var cu = Uint16List.fromList(k.codeUnits);
+          var cus = Uint16List(k.length);
+
+          for (var i = 0; i < k.length; i++) {
+            if (cu[i] == c1) {
+              cus[i] = cc1;
+            } else if (cu[i] == c2) {
+              cus[i] = cc2;
+            } else if (cu[i] == c3) {
+              cus[i] = cc3;
+            } else {
+              cus[i] = cu[i];
+            }
+          }
+
+          var s = String.fromCharCodes(cus);
+          return s;
+        }, growable: false);
+        return kk;
+      }
+
+      List<String> justUint16() {
+        var kk = List<String>.generate(keys.length, (i) {
+          var k = keys[i];
+          var cu = Uint16List.fromList(k.codeUnits);
+
+          for (var i = 0; i < k.length; i++) {
+            if (cu[i] == c1) {
+              cu[i] = cc1;
+            } else if (cu[i] == c2) {
+              cu[i] = cc2;
+            } else if (cu[i] == c3) {
+              cu[i] = cc3;
+            }
+          }
+
+          var s = String.fromCharCodes(cu);
+          return s;
+        }, growable: false);
+        return kk;
+      }
+
+      List<String> contains() {
+        var kk = List<String>.generate(keys.length, (i) {
+          var s = keys[i];
+          if (s.contains('ё')) s = s.replaceAll('ё', 'е');
+          if (s.contains('і')) s = s.replaceAll('і', 'и');
+          if (s.contains('ў')) s = s.replaceAll('ў', 'у');
+          return s;
+        }, growable: false);
+        return kk;
+      }
+
       var org = _benchmark(orig);
       var cus = _benchmark(codeUnits);
       var cus2 = _benchmark(codeUnits2);
+      var int16 = _benchmark(uint16);
+      var int1616 = _benchmark(uint16uint16);
+      var just16 = _benchmark(justUint16);
+      var cont = _benchmark(contains);
 
       org.prnt('ORG  ');
       cus.prnt('CUS  ');
       cus2.prnt('CUS2 ');
+      int16.prnt('INT16 ');
+      int1616.prnt('INT1616 ');
+      just16.prnt('JUST16');
+      cont.prnt('CONT');
     });
 
     test('UTF8 vs UTF16 decoding', () {
@@ -215,7 +291,7 @@ void main() async {
       utf16bench.prnt('UTF16 ');
       utf16ListBench.prnt('UTF16L');
     });
-  }, skip: false);
+  }, skip: true);
 }
 
 class _Benchmark {
