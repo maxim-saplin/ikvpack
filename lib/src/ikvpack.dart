@@ -5,9 +5,12 @@ import 'dart:io';
 import 'dart:isolate';
 import 'dart:math';
 import 'dart:typed_data';
+
+import 'package:archive/archive.dart';
+
 import 'package:ikvpack/ikvpack.dart';
 
-import 'storage_vm.dart'
+import 'storage_web.dart'
     if (dart.library.io) 'storage_vm.dart'
     if (dart.library.html) 'storage_web.dart';
 
@@ -22,49 +25,54 @@ class IkvPack {
   bool _shadowKeysUsed = false;
   bool get shadowKeysUsed => _shadowKeysUsed;
 
-  IkvPack(String path, [this.keysCaseInsensitive = true])
+  IkvPack._(String path, [this.keysCaseInsensitive = true])
       : _valuesInMemory = false,
-        _storage = Storage(path) {
-    var sw = Stopwatch();
-    sw.start();
+        _storage = Storage(path);
+
+  static Future<IkvPack> load(String path, [keysCaseInsensitive = true]) async {
+    // var sw = Stopwatch();
+    // sw.start();
+    var ikv = IkvPack._(path, keysCaseInsensitive);
     try {
-      _originalKeys = _storage!.readSortedKeys();
+      ikv._originalKeys = await ikv._storage!.readSortedKeys();
     } catch (e) {
-      _storage?.dispose();
+      ikv._storage?.dispose();
       rethrow;
     }
-    sw.stop();
-    print('File load ${sw.elapsedMilliseconds}');
-    sw.reset();
-    sw.start();
+    // sw.stop();
+    // print('File load ${sw.elapsedMilliseconds}');
+    // sw.reset();
+    // sw.start();
 
     // check if there's need for shadow keys
-    if (!(_storage!.noUpperCaseFlag && _storage!.noOutOfOrderFlag)) {
+    if (!(ikv._storage!.noUpperCaseFlag && ikv._storage!.noOutOfOrderFlag)) {
       if (keysCaseInsensitive) {
-        _shadowKeysUsed = true;
-        _shadowKeys = List.generate(_originalKeys.length, (i) {
-          var k = _storage!.noUpperCaseFlag
-              ? _originalKeys[i]
-              : _originalKeys[i].toLowerCase();
-          if (!_storage!.noOutOfOrderFlag) k = _fixOutOfOrder(k);
+        ikv._shadowKeysUsed = true;
+        ikv._shadowKeys = List.generate(ikv._originalKeys.length, (i) {
+          var k = ikv._storage!.noUpperCaseFlag
+              ? ikv._originalKeys[i]
+              : ikv._originalKeys[i].toLowerCase();
+          if (!ikv._storage!.noOutOfOrderFlag) k = _fixOutOfOrder(k);
           return k;
         }, growable: false);
       }
     } else {
-      _shadowKeysUsed = false;
+      ikv._shadowKeysUsed = false;
     }
 
-    sw.stop();
-    print('Shadow keys ${sw.elapsedMilliseconds}');
-    sw.reset();
-    sw.start();
+    // sw.stop();
+    // print('Shadow keys ${sw.elapsedMilliseconds}');
+    // sw.reset();
+    // sw.start();
 
-    _keysReadOnly = UnmodifiableListView<String>(_originalKeys);
+    ikv._keysReadOnly = UnmodifiableListView<String>(ikv._originalKeys);
 
-    _buildBaskets();
+    ikv._buildBaskets();
 
-    sw.stop();
-    print('Baskets ${sw.elapsedMilliseconds}');
+    // sw.stop();
+    // print('Baskets ${sw.elapsedMilliseconds}');
+
+    return ikv;
   }
 
   static Future<IkvPack> loadInIsolate(String path,
@@ -116,7 +124,6 @@ class IkvPack {
     return ic.run((arg) => updateProgress?.call(arg));
   }
 
-  //TODO, add test
   /// Deletes file on disk or related IndexedDB in Web
   static void delete(String path) {
     deleteFromPath(path);
@@ -129,21 +136,22 @@ class IkvPack {
   bool keysCaseInsensitive = true;
 
   List<String> _originalKeys = [];
-  // TODO, Test performance/mem consumption, maybe make 5-10 char lower case keys index for fast searches, not full keys
   List<String> _shadowKeys = [];
   final List<_KeyBasket> _keyBaskets = [];
-  List<List<int>> _values = [];
+  List<Uint8List> _values = [];
 
   // Archive packaghe appeared to be faster in compressing and decompressing
-  // though caught strange outofmemory exception on version 3.0-nullsafe
+  // UPD: Though caught strange out-of=memory exception on version 3.0-nullsafe
   // Decided to used standrad Dart's codec
-  //final ZLibDecoder decoder = ZLibDecoder();
+  // UPD2: Turned out dart:io is requried for standard compressor, revertimg to archive
+  final ZLibDecoder decoder = ZLibDecoder();
+  final ZLibEncoder encoder = ZLibEncoder();
 
-  final ZLibCodec codec = ZLibCodec(
-      level: 7,
-      memLevel: ZLibOption.maxMemLevel,
-      raw: true,
-      strategy: ZLibOption.strategyDefault);
+  // final ZLibCodec codec = ZLibCodec(
+  //     level: 7,
+  //     memLevel: ZLibOption.maxMemLevel,
+  //     raw: true,
+  //     strategy: ZLibOption.strategyDefault);
 
   UnmodifiableListView<String> _keysReadOnly = UnmodifiableListView<String>([]);
   UnmodifiableListView<String> get keys => _keysReadOnly;
@@ -165,7 +173,6 @@ class IkvPack {
         _storage = null {
     var entries = _getSortedEntries(map);
     if (updateProgress != null) updateProgress(5);
-    //var enc = ZLibEncoder();
 
     _originalKeys =
         List.generate(entries.length, (i) => entries[i].key, growable: false);
@@ -190,7 +197,8 @@ class IkvPack {
 
     _values = List.generate(entries.length, (i) {
       var utf = utf8.encode(entries[i].value);
-      var zip = codec.encoder.convert(utf);
+      //var zip = codec.encoder.convert(utf) as Uint8List; // causes huge memory leak
+      var zip = Uint8List.fromList(encoder.encode(utf));
       if (updateProgress != null) {
         progress = (15 + 80 * i / entries.length).round();
         if (progress != prevProgress) {
@@ -277,17 +285,69 @@ class IkvPack {
   }
 
   /// Serialize object to a given file (on VM) or IndexedDB (in Web)
-  void saveTo(String path) {
-    saveToPath(path, _originalKeys, _values);
+  Future<void> saveTo(String path) async {
+    return saveToPath(path, _originalKeys, _values);
   }
 
   /// Can be slow
-  Stats? getStats() {
+  Future<Stats>? getStats() {
     try {
       return _storage!.getStats();
     } catch (_) {
       return null;
     }
+  }
+
+  /// Creates a list of entries for a given range (if provided) or all keys/values.
+  /// Key order is preserved
+  LinkedHashMap<String, Uint8List> getRangeRaw(int? startIndex, int? endIndex) {
+    var start = startIndex ?? 0;
+    var end = endIndex ?? length - 1;
+
+    if (start >= length) throw 'startIndex can\'t be greater than length-1';
+    if (end < 0) throw 'endIndex can\'t be negative';
+    if (end <= start) throw 'endIndex must be greater than startIndex';
+
+    // ignore: prefer_collection_literals
+    var result = LinkedHashMap<String, Uint8List>();
+
+    if (_storage != null && !_storage!.useIndexToGetValue) {
+      for (var i = start; i <= end; i++) {
+        result[_originalKeys[i]] = valueRawCompressed(_originalKeys[i]);
+      }
+    } else {
+      for (var i = start; i <= end; i++) {
+        result[_originalKeys[i]] = valueRawCompressedAt(i);
+      }
+    }
+
+    return result;
+  }
+
+  /// Creates a list of entries for a given range (if provided) or all keys/values.
+  /// Key order is preserved
+  LinkedHashMap<String, String> getRange(int? startIndex, int? endIndex) {
+    var start = startIndex ?? 0;
+    var end = endIndex ?? length - 1;
+
+    if (start >= length) throw 'startIndex can\'t be greater than length-1';
+    if (end < 0) throw 'endIndex can\'t be negative';
+    if (end <= start) throw 'endIndex must be greater than startIndex';
+
+    // ignore: prefer_collection_literals
+    var result = LinkedHashMap<String, String>();
+
+    if (_storage != null && !_storage!.useIndexToGetValue) {
+      for (var i = start; i <= end; i++) {
+        result[_originalKeys[i]] = value(_originalKeys[i]);
+      }
+    } else {
+      for (var i = start; i <= end; i++) {
+        result[_originalKeys[i]] = valueAt(i);
+      }
+    }
+
+    return result;
   }
 
   int get length => _originalKeys.length;
@@ -296,8 +356,10 @@ class IkvPack {
   @pragma('dart2js:tryInline')
   String valueAt(int index) {
     var bytes = valuesInMemory
-        ? codec.decoder.convert(_values[index])
-        : codec.decoder.convert(_storage!.valueAt(index));
+        ? decoder.decodeBytes(_values[index])
+        : decoder.decodeBytes(_storage!.valueAt(index));
+    // ? codec.decoder.convert(_values[index])
+    // : codec.decoder.convert(_storage!.valueAt(index));
     var value = utf8.decode(bytes, allowMalformed: true);
     return value;
   }
@@ -317,7 +379,7 @@ class IkvPack {
     if (index < 0) return ''; //throw 'key not foiund';
 
     return _storage != null && !_storage!.useIndexToGetValue
-        ? utf8.decode(codec.decoder.convert(_storage!.value(key)),
+        ? utf8.decode(decoder.decodeBytes(_storage!.value(key)),
             allowMalformed: true)
         : valueAt(index);
   }
@@ -601,11 +663,11 @@ abstract class StorageBase {
   bool get noOutOfOrderFlag;
   bool get noUpperCaseFlag;
 
-  List<String> readSortedKeys();
-  List<int> value(String key);
-  List<int> valueAt(int index);
+  Future<List<String>> readSortedKeys();
+  Uint8List value(String key);
+  Uint8List valueAt(int index);
   int get sizeBytes;
-  Stats getStats();
+  Future<Stats> getStats();
   void dispose();
   bool get useIndexToGetValue;
   // the bellow 2 methods are workarounds for passing Storage across isolates,
@@ -702,7 +764,7 @@ class _IsolateParams {
 
 void _loadIkv(_IsolateParams params) async {
   try {
-    var ikv = IkvPack(params.path, params.keysCaseInsensitive);
+    var ikv = await IkvPack.load(params.path, params.keysCaseInsensitive);
     ikv._storage?.closeFile();
     params.sendPort.send(ikv);
   } catch (e) {
@@ -717,8 +779,8 @@ class IkvPooledJob extends PooledJob<IkvPack> {
   IkvPooledJob(this.path, this.keysCaseInsensitive);
 
   @override
-  IkvPack job() {
-    var ikv = IkvPack(path, keysCaseInsensitive);
+  Future<IkvPack> job() async {
+    var ikv = await IkvPack.load(path, keysCaseInsensitive);
     ikv._storage?.closeFile();
     return ikv;
   }

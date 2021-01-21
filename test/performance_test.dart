@@ -1,3 +1,5 @@
+@TestOn('vm')
+
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -11,8 +13,8 @@ const enFile = 'test/performance_data/EN_RU Multitran vol.2.dikt';
 
 void main() async {
   group('Real file tests', () {
-    int loadCurrent(String path, bool keysCaseInsensitive) {
-      var ikv = IkvPack(path, keysCaseInsensitive);
+    Future<int> loadCurrent(String path, bool keysCaseInsensitive) async {
+      var ikv = await IkvPack.load(path, keysCaseInsensitive);
       return ikv.length;
     }
 
@@ -36,7 +38,7 @@ void main() async {
       ikv100RuInsense.prnt('I100 RU, CASE-INSE', true);
       currentEnInsense.prnt('CURR EN, CASE-INSE', true);
       ikv100EnInsense.prnt('I100 EN, CASE-INSE', true);
-    }, skip: false);
+    }, skip: true);
     test('Case-Sensitive, Current version not slower than 1.0.0', () {
       var currentRuSense = _benchmark(() => loadCurrent(ruFile, false), 6, 1);
       var ikv100RuSense = _benchmark(() => loadIkv100(ruFile, false), 6, 1);
@@ -47,7 +49,7 @@ void main() async {
       ikv100RuSense.prnt('I100 RU, CASE-SENS', true);
       currentEnSense.prnt('CURR EN, CASE-SENS', true);
       ikv100EnSense.prnt('I100 EN, CASE-SENS', true);
-    }, skip: false);
+    }, skip: true);
   });
 
   group('Trying out certain patterns for performance', () {
@@ -217,11 +219,11 @@ void main() async {
       cont.prnt('CONT');
     });
 
-    test('UTF8 vs UTF16 decoding', () {
+    test('UTF8 vs UTF16 decoding', () async {
       //var keys = testMap.keys;
 
       // var ikv = IkvPack(ruFile, false);
-      var ikv = IkvPack(enFile, false);
+      var ikv = await IkvPack.load(enFile, false);
       var keys = ikv.keys;
 
 // RU

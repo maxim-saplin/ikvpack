@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:isolate';
 
 abstract class PooledJob<E> {
-  E job();
+  Future<E> job();
 }
 
 class IsolatePool {
@@ -139,11 +139,11 @@ void _pooledIsolateBody(_PooledIsolateParams params) async {
   var isolatePort = ReceivePort();
   params.sendPort.send(_PooledIsolateParams(
       isolatePort.sendPort, params.isolateIndex, params.stopwatch));
-  isolatePort.listen((message) {
+  isolatePort.listen((message) async {
     if (message is _PooledJob) {
       try {
         //print('Job index ${message.jobIndex}');
-        var result = message.job.job();
+        var result = await message.job.job();
         params.sendPort.send(
             _PooledJobResult(result, message.jobIndex, message.isolateIndex));
       } catch (e) {

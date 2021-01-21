@@ -1,38 +1,81 @@
-// import 'dart:collection';
-// import 'dart:typed_data';
-// import '../ikvpack.dart';
+import 'dart:html';
+import 'dart:indexed_db';
+import 'dart:async';
+import 'dart:typed_data';
 
-// class IkvPack extends IkvPackBase {
-//   IkvPack.fromStringMap(Map<String, String> map) : super.fromStringMap(map);
+import 'bulkinsert_js.dart';
+import 'ikvpack.dart';
 
-//   @override
-//   // TODO: implement indexedKeys
-//   bool get indexedKeys => throw UnimplementedError();
+class Storage implements StorageBase {
+  Storage(this.path);
+  final String path;
 
-//   @override
-//   // TODO: implement keys
-//   UnmodifiableListView<String> get keys => throw UnimplementedError();
+  @override
+  void closeFile() {}
 
-//   @override
-//   Iterable<String> keysStartingWith(String value, [int maxResult = 100]) {
-//     // TODO: implement keysStartingWith
-//     throw UnimplementedError();
-//   }
+  @override
+  void dispose() {}
 
-//   @override
-//   void packToFile(String path) {
-//     // TODO: implement packToFile
-//   }
+  @override
+  Future<Stats> getStats() {
+    throw UnimplementedError();
+  }
 
-//   @override
-//   Uint8List value(String key) {
-//     // TODO: implement value
-//     throw UnimplementedError();
-//   }
+  @override
+  bool get noOutOfOrderFlag => false;
 
-//   @override
-//   Uint8List valueAt(int index) {
-//     // TODO: implement valueAt
-//     throw UnimplementedError();
-//   }
-// }
+  @override
+  bool get noUpperCaseFlag => false;
+
+  @override
+  Future<List<String>> readSortedKeys() {
+    throw UnimplementedError();
+  }
+
+  @override
+  void reopenFile() {}
+
+  @override
+  int get sizeBytes => throw UnimplementedError();
+
+  @override
+  bool get useIndexToGetValue => throw UnimplementedError();
+
+  @override
+  Uint8List value(String key) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Uint8List valueAt(int index) {
+    throw UnimplementedError();
+  }
+}
+
+Future<Database> getDb(String path) async {
+  var db = await window.indexedDB!.open(path, version: 1, onUpgradeNeeded: (e) {
+    var db = e.target.result as Database;
+    if (!db.objectStoreNames!.contains('ikv')) {
+      db.createObjectStore('ikv');
+    }
+  });
+
+  return db;
+}
+
+Future<void> saveToPath(
+    String path, List<String> keys, List<Uint8List> values) async {
+  var db = await getDb(path);
+
+  print('Inserting keys to IndexedDB..');
+  await insert(db, keys, values);
+  print('Keys inserted to IndexedDB');
+}
+
+void deleteFromPath(String path) {}
+
+Future<IkvInfo> storageGetInfo(String path) async {
+  var completer = Completer<IkvInfo>();
+  completer.complete(IkvInfo(1, 1));
+  return completer.future;
+}

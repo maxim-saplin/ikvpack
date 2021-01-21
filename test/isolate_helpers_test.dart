@@ -1,3 +1,5 @@
+@TestOn('vm')
+
 import 'package:ikvpack/ikvpack.dart';
 import 'package:ikvpack/src/isolate_helpers.dart';
 import 'package:test/test.dart';
@@ -8,9 +10,10 @@ class NumbersJob extends PooledJob<int> {
   NumbersJob(this.number);
 
   @override
-  int job() {
+  Future<int> job() async {
     print('Number ${number}');
     return number;
+    //return Future<int>(() => number);
   }
 }
 
@@ -20,7 +23,7 @@ class ThrowingNumbersJob extends PooledJob<int> {
   ThrowingNumbersJob(this.number);
 
   @override
-  int job() {
+  Future<int> job() async {
     if (number % 2 == 0) throw 'Error on number ${number}';
     print('Number ${number}');
     return number;

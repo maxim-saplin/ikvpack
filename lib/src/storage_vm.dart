@@ -62,7 +62,7 @@ class Storage implements StorageBase {
   bool get noUpperCaseFlag => (_flags & 0x80000000) >> 31 == 1;
 
   @override
-  List<String> readSortedKeys() {
+  Future<List<String>> readSortedKeys() async {
     // var sw = Stopwatch();
     // var sw2 = Stopwatch();
     // var sw3 = Stopwatch();
@@ -147,7 +147,7 @@ class Storage implements StorageBase {
 
   /// File storage only supports referencing values by index
   @override
-  List<int> value(String key) {
+  Uint8List value(String key) {
     throw UnimplementedError();
   }
 
@@ -155,14 +155,14 @@ class Storage implements StorageBase {
   bool get useIndexToGetValue => true;
 
   @override
-  List<int> valueAt(int index) {
+  Uint8List valueAt(int index) {
     //var o = _offsets[index];
     var offset = _valuesOffsets!.getUint32(index * 8);
     var length = _valuesOffsets!.getUint32(index * 8 + 4);
     var f = _file as RandomAccessFile;
     f.setPositionSync(offset);
     var value = f.readSync(length);
-    return value.toList(growable: false);
+    return value;
   }
 
   @override
@@ -180,8 +180,8 @@ class Storage implements StorageBase {
   int get sizeBytes => _file != null ? _file!.lengthSync() : -1;
 
   @override
-  Stats getStats() {
-    var keys = readSortedKeys();
+  Future<Stats> getStats() async {
+    var keys = await readSortedKeys();
 
     var keysNumber = _length;
     var keysBytes = _offsetsOffset - 16 - _length * 2;
@@ -255,7 +255,8 @@ void _writeUint16(RandomAccessFile raf, int value) {
   raf.writeFromSync(bd.buffer.asUint8List());
 }
 
-void saveToPath(String path, List<String> keys, List<List<int>> values) {
+Future<void> saveToPath(
+    String path, List<String> keys, List<Uint8List> values) async {
   var raf = File(path).openSync(mode: FileMode.write);
   try {
     raf.setPositionSync(4); //skip reserved
@@ -296,7 +297,7 @@ void saveToPath(String path, List<String> keys, List<List<int>> values) {
       raf.writeFromSync(v);
     }
   } finally {
-    raf.closeSync();
+    await raf.close();
   }
 }
 

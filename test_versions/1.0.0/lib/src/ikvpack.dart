@@ -102,7 +102,6 @@ class IkvPack {
     return ic.run((arg) => updateProgress?.call(arg));
   }
 
-  //TODO, add test
   /// Deletes file on disk or related IndexedDB in Web
   static void delete(String path) {
     deleteFromPath(path);
@@ -115,7 +114,6 @@ class IkvPack {
   bool keysCaseInsensitive = true;
 
   List<String> _originalKeys = [];
-  // TODO, Test performance/mem consumption, maybe make 5-10 char lower case keys index for fast searches, not full keys
   List<String> _shadowKeys = [];
   final List<_KeyBasket> _keyBaskets = [];
   List<List<int>> _values = [];
