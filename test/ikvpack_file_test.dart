@@ -7,7 +7,6 @@ import 'package:ikvpack/src/isolate_helpers.dart';
 import 'package:test/test.dart';
 
 import 'shared.dart';
-import 'testMap.dart';
 
 void main() async {
   group('File tests, case-insensitive', () {
@@ -19,30 +18,6 @@ void main() async {
 
     runCaseInvariantTests();
     runCaseInsensitiveTests();
-
-    test('IkvPack can return progress while being built from map', () async {
-      var progressCalledTimes = 0;
-      var maxProgress = 0;
-      var ik = IkvPack.fromMap(testMap, true, (progress) {
-        progressCalledTimes++;
-        maxProgress = progress;
-      });
-      expect(ik.length > 0, true);
-      expect(progressCalledTimes > 2, true);
-      expect(maxProgress, 100);
-    });
-
-    test('IkvPack can be built from map in isolate', () async {
-      var progressCalledTimes = 0;
-      var maxProgress = 0;
-      var ik = await IkvPack.buildFromMapInIsolate(testMap, true, (progress) {
-        progressCalledTimes++;
-        maxProgress = progress;
-      });
-      expect(ik.length > 0, true);
-      expect(progressCalledTimes > 2, true);
-      expect(maxProgress, 100);
-    });
   });
 
   group('File tests', () {
@@ -69,7 +44,7 @@ void main() async {
       expect(v, '<div>вспахать</div>');
     });
 
-    test('IkvPack error while loading in isolate is properly handlede',
+    test('IkvPack error while loading in isolate is properly handled',
         () async {
       var errorHandeled = false;
 

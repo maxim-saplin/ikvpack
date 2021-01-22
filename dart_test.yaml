@@ -1,4 +1,4 @@
-# platforms: [vm, chrome]
+platforms: [vm, chrome]
 
 presets:
   debug-web:

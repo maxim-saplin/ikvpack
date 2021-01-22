@@ -90,6 +90,30 @@ void main() async {
       //expect(ikv.indexedKeys, true);
       expect(ikv.valuesInMemory, true);
     });
+
+    test('IkvPack can return progress while being built from map', () async {
+      var progressCalledTimes = 0;
+      var maxProgress = 0;
+      var ik = IkvPack.fromMap(testMap, true, (progress) {
+        progressCalledTimes++;
+        maxProgress = progress;
+      });
+      expect(ik.length > 0, true);
+      expect(progressCalledTimes > 2, true);
+      expect(maxProgress, 100);
+    });
+
+    test('IkvPack can be built from map in isolate', () async {
+      var progressCalledTimes = 0;
+      var maxProgress = 0;
+      var ik = await IkvPack.buildFromMapInIsolate(testMap, true, (progress) {
+        progressCalledTimes++;
+        maxProgress = progress;
+      });
+      expect(ik.length > 0, true);
+      expect(progressCalledTimes > 2, true);
+      expect(maxProgress, 100);
+    }, testOn: 'vm');
   });
 
   group('In-memory tests, case-sensitive', () {

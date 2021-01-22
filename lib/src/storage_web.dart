@@ -32,7 +32,7 @@ class Storage implements StorageBase {
   @override
   Future<List<String>> readSortedKeys() async {
     _db = await _getDb(path);
-    var store = await _getStoreKeyInDb(_db);
+    var store = await _getKeyStoreInDb(_db);
     var request = store.getAll(null);
     var completer = Completer<List<String>>();
     request.onSuccess.listen((_) {
@@ -57,16 +57,12 @@ class Storage implements StorageBase {
 
   @override
   Future<Uint8List> value(String key) async {
-    // var store = await _getStoreInDb(_db);
-    // var bytes = await store.getObject(key) as ByteBuffer;
-    // var list = bytes.asUint8List();
-    // return list;
     throw UnimplementedError();
   }
 
   @override
   Future<Uint8List> valueAt(int index) async {
-    var store = await _getStoreValueInDb(_db);
+    var store = await _getValueStoreInDb(_db);
     var bytes = await store.getObject(index) as ByteBuffer;
     var list = bytes.asUint8List();
     return list;
@@ -90,11 +86,11 @@ Future<Database> _getDb(String path) async {
   return db;
 }
 
-Future<ObjectStore> _getStoreKeyInDb(Database db) async {
+Future<ObjectStore> _getKeyStoreInDb(Database db) async {
   return db.transaction(_storeKeys, 'readonly').objectStore(_storeKeys);
 }
 
-Future<ObjectStore> _getStoreValueInDb(Database db) async {
+Future<ObjectStore> _getValueStoreInDb(Database db) async {
   return db.transaction(_storeValues, 'readonly').objectStore(_storeValues);
 }
 
@@ -113,7 +109,8 @@ void deleteFromPath(String path) {
 }
 
 Future<IkvInfo> storageGetInfo(String path) async {
-  var completer = Completer<IkvInfo>();
-  completer.complete(IkvInfo(1, 1));
-  return completer.future;
+  var db = await _getDb(path);
+  var keys = await _getKeyStoreInDb(db);
+  var count = await keys.count();
+  return IkvInfo(-1, count);
 }
