@@ -51,21 +51,21 @@ void main() async {
       var ik = IkvPack.fromMap(m);
 
       expect(ik.length, 3);
-      expect(ik['a'], 'aaa');
-      expect(ik['b'], 'bbb');
-      expect(ik['c'], 'ccc');
+      expect(await ik['a'], 'aaa');
+      expect(await ik['b'], 'bbb');
+      expect(await ik['c'], 'ccc');
 
       await ik.saveTo('tmp/test.dat');
       ik = await IkvPack.load('tmp/test.dat');
       ik.dispose();
 
       expect(ik.length, 3);
-      expect(() => ik['a'], throwsException);
+      expect(() async => await ik['a'], throwsException);
     });
 
     test('IkvPack can be loaded in isolate', () async {
       var ik = await IkvPack.loadInIsolate('test/testIkv.dat', true);
-      var v = ik['зараць'];
+      var v = await ik['зараць'];
       expect(v, '<div>вспахать</div>');
     });
 
@@ -135,17 +135,17 @@ void main() async {
       var ik = IkvPack.fromMap(m);
 
       expect(ik.length, 3);
-      expect(ik['a'], 'aaa');
-      expect(ik['b'], 'bbb');
-      expect(ik['c'], 'ccc');
+      expect(await ik['a'], 'aaa');
+      expect(await ik['b'], 'bbb');
+      expect(await ik['c'], 'ccc');
 
       await ik.saveTo('tmp/test.dat');
       ik = await IkvPack.load('tmp/test.dat');
 
       expect(ik.length, 3);
-      expect(ik['a'], 'aaa');
-      expect(ik['b'], 'bbb');
-      expect(ik['c'], 'ccc');
+      expect(await ik['a'], 'aaa');
+      expect(await ik['b'], 'bbb');
+      expect(await ik['c'], 'ccc');
     });
 
     test(

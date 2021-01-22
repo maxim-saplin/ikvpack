@@ -1,2 +1,16 @@
 # platforms: [vm, chrome]
-platforms: [vm]
+
+presets:
+  debug-web:
+    platforms: [chrome]
+    pause_after_load: true
+    verbose_trace: false
+    js_trace: true
+    paths:
+    - test/web_test.dart
+  run-web:
+    platforms: [chrome]
+    verbose_trace: false
+    js_trace: true
+    paths:
+    - test/web_test.dart

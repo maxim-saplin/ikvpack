@@ -147,7 +147,7 @@ class Storage implements StorageBase {
 
   /// File storage only supports referencing values by index
   @override
-  Uint8List value(String key) {
+  Future<Uint8List> value(String key) {
     throw UnimplementedError();
   }
 
@@ -155,18 +155,18 @@ class Storage implements StorageBase {
   bool get useIndexToGetValue => true;
 
   @override
-  Uint8List valueAt(int index) {
+  Future<Uint8List> valueAt(int index) async {
     //var o = _offsets[index];
     var offset = _valuesOffsets!.getUint32(index * 8);
     var length = _valuesOffsets!.getUint32(index * 8 + 4);
     var f = _file as RandomAccessFile;
     f.setPositionSync(offset);
-    var value = f.readSync(length);
+    var value = await f.read(length);
     return value;
   }
 
   @override
-  void closeFile() {
+  void close() {
     _file?.close();
     _file = null;
   }

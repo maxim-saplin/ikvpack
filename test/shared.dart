@@ -18,28 +18,28 @@ void runCaseInvariantTests() {
     expect(k, 'Aaron Burr');
   });
 
-  test('Can get value by index', () {
-    var v = _ikv.valueAt(0);
+  test('Can get value by index', () async {
+    var v = await _ikv.valueAt(0);
     expect(
         v.startsWith(
             '<div><i>adjective</i></div><div>being six more than thirty'),
         true);
-    v = _ikv.valueAt(1);
+    v = await _ikv.valueAt(1);
     expect(
         v.startsWith(
             '<div><i>noun</i></div><div>United States politician who served'),
         true);
   });
 
-  test('Getting raw range works', () {
-    var range = _ikv.getRangeRaw(1, 11);
+  test('Getting raw range works', () async {
+    var range = await _ikv.getRangeRaw(1, 11);
     expect(range.length, 11);
     var x = range.entries.first;
     expect(x.key, 'Aaron Burr');
   });
 
-  test('Getting range works', () {
-    var range = _ikv.getRange(1, 11);
+  test('Getting range works', () async {
+    var range = await _ikv.getRange(1, 11);
     expect(range.length, 11);
     var x = range.entries.first;
     expect(x.key, 'Aaron Burr');
@@ -47,15 +47,15 @@ void runCaseInvariantTests() {
         '<div><i>noun</i></div><div>United States politician who served as vice president under Jefferson; he mortally wounded his political rival Alexander Hamilton in a duel and fled south <i>(1756-1836)</i></div><div><span>•</span> <i>Syn</i>: ↑<a href=Burr>Burr</a></div><div><span>•</span> <i>Instance Hypernyms</i>: ↑<a href=politician>politician</a>, ↑<a href=politico>politico</a>, ↑<a href=pol>pol</a>, ↑<a href=political leader>political leader</a></div>');
   });
 
-  test('Can get value by key', () {
-    var v = _ikv['зараць'];
+  test('Can get value by key', () async {
+    var v = await _ikv['зараць'];
     expect(v, '<div>вспахать</div>');
   });
 
-  test('Can get raw uncompressed value', () {
-    var v = _ikv.valueRawCompressed('зараць');
+  test('Can get raw uncompressed value', () async {
+    var v = await _ikv.valueRawCompressed('зараць');
     expect(v.isNotEmpty, true);
-    v = _ikv.valueRawCompressedAt(2);
+    v = await _ikv.valueRawCompressedAt(2);
     expect(v.isNotEmpty, true);
   });
 
@@ -69,10 +69,10 @@ void runCaseInvariantTests() {
     expect(keys.length, 1);
   });
 
-  test('Non existing keys return empty result', () {
+  test('Non existing keys return empty result', () async {
     expect(_ikv.containsKey('wewer'), false);
-    expect(_ikv['wewer'], '');
-    expect(_ikv.valueRawCompressed('wewer').isEmpty, true);
+    expect(await _ikv['wewer'], '');
+    expect((await _ikv.valueRawCompressed('wewer')).isEmpty, true);
   });
 }
 
@@ -82,8 +82,8 @@ void runCaseInsensitiveTests() {
     expect(k, 'яскравасьць');
   });
 
-  test('Case-insensitive search by key works', () {
-    var v = _ikv['afrikaans'];
+  test('Case-insensitive search by key works', () async {
+    var v = await _ikv['afrikaans'];
     expect(
         v.startsWith(
             '<div><b>I</b></div><div><i>noun</i></div><div>an official language of the'),
@@ -118,10 +118,11 @@ void runCaseInsensitiveTests() {
     expect(keys.length, 1);
   });
 
-  test('"и" and "i" subsitute wroks when getting value by original key', () {
+  test('"и" and "i" subsitute wroks when getting value by original key',
+      () async {
     var keys = _ikv.keysStartingWith('ихтыёл');
     expect(keys.length, 1);
-    var val = _ikv[keys[0]];
+    var val = await _ikv[keys[0]];
     expect(val, '<div>ихтиол</div>');
   });
 

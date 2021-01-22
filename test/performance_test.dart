@@ -8,8 +8,10 @@ import 'testMap.dart';
 import 'package:ikvpack/ikvpack.dart';
 import 'package:ikvpack_100/ikvpack.dart' as ikv100;
 
-const ruFile = 'test/performance_data/RU_EN Multitran vol.2.dikt';
-const enFile = 'test/performance_data/EN_RU Multitran vol.2.dikt';
+const ruFile100 = 'test/performance_data/100/RU_EN Multitran vol.2.dikt';
+const enFile100 = 'test/performance_data/100/EN_RU Multitran vol.2.dikt';
+const ruFile101 = 'test/performance_data/RU_EN Multitran vol.2.dikt';
+const enFile101 = 'test/performance_data/EN_RU Multitran vol.2.dikt';
 
 void main() async {
   group('Real file tests', () {
@@ -29,27 +31,31 @@ void main() async {
       // ikv = IkvPack(enFile, false);
       // stats = ikv.getStats();
 
-      var currentRuInsense = _benchmark(() => loadCurrent(ruFile, true), 6, 1);
-      var ikv100RuInsense = _benchmark(() => loadIkv100(ruFile, true), 6, 1);
-      var currentEnInsense = _benchmark(() => loadCurrent(enFile, true), 6, 1);
-      var ikv100EnInsense = _benchmark(() => loadIkv100(enFile, true), 6, 1);
+      var currentRuInsense =
+          _benchmark(() => loadCurrent(ruFile101, true), 6, 1);
+      var ikv100RuInsense = _benchmark(() => loadIkv100(ruFile100, true), 6, 1);
+      var currentEnInsense =
+          _benchmark(() => loadCurrent(enFile101, true), 6, 1);
+      var ikv100EnInsense = _benchmark(() => loadIkv100(enFile100, true), 6, 1);
 
       currentRuInsense.prnt('CURR RU, CASE-INSE', true);
       ikv100RuInsense.prnt('I100 RU, CASE-INSE', true);
       currentEnInsense.prnt('CURR EN, CASE-INSE', true);
       ikv100EnInsense.prnt('I100 EN, CASE-INSE', true);
-    }, skip: true);
+    }, skip: false);
     test('Case-Sensitive, Current version not slower than 1.0.0', () {
-      var currentRuSense = _benchmark(() => loadCurrent(ruFile, false), 6, 1);
-      var ikv100RuSense = _benchmark(() => loadIkv100(ruFile, false), 6, 1);
-      var currentEnSense = _benchmark(() => loadCurrent(enFile, false), 6, 1);
-      var ikv100EnSense = _benchmark(() => loadIkv100(enFile, false), 6, 1);
+      var currentRuSense =
+          _benchmark(() => loadCurrent(ruFile101, false), 6, 1);
+      var ikv100RuSense = _benchmark(() => loadIkv100(ruFile100, false), 6, 1);
+      var currentEnSense =
+          _benchmark(() => loadCurrent(enFile101, false), 6, 1);
+      var ikv100EnSense = _benchmark(() => loadIkv100(enFile100, false), 6, 1);
 
       currentRuSense.prnt('CURR RU, CASE-SENS', true);
       ikv100RuSense.prnt('I100 RU, CASE-SENS', true);
       currentEnSense.prnt('CURR EN, CASE-SENS', true);
       ikv100EnSense.prnt('I100 EN, CASE-SENS', true);
-    }, skip: true);
+    }, skip: false);
   });
 
   group('Trying out certain patterns for performance', () {
@@ -223,7 +229,7 @@ void main() async {
       //var keys = testMap.keys;
 
       // var ikv = IkvPack(ruFile, false);
-      var ikv = await IkvPack.load(enFile, false);
+      var ikv = await IkvPack.load(enFile101, false);
       var keys = ikv.keys;
 
 // RU

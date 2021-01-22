@@ -300,7 +300,8 @@ class IkvPack {
 
   /// Creates a list of entries for a given range (if provided) or all keys/values.
   /// Key order is preserved
-  LinkedHashMap<String, Uint8List> getRangeRaw(int? startIndex, int? endIndex) {
+  Future<LinkedHashMap<String, Uint8List>> getRangeRaw(
+      int? startIndex, int? endIndex) async {
     var start = startIndex ?? 0;
     var end = endIndex ?? length - 1;
 
@@ -313,11 +314,11 @@ class IkvPack {
 
     if (_storage != null && !_storage!.useIndexToGetValue) {
       for (var i = start; i <= end; i++) {
-        result[_originalKeys[i]] = valueRawCompressed(_originalKeys[i]);
+        result[_originalKeys[i]] = await valueRawCompressed(_originalKeys[i]);
       }
     } else {
       for (var i = start; i <= end; i++) {
-        result[_originalKeys[i]] = valueRawCompressedAt(i);
+        result[_originalKeys[i]] = await valueRawCompressedAt(i);
       }
     }
 
@@ -326,7 +327,8 @@ class IkvPack {
 
   /// Creates a list of entries for a given range (if provided) or all keys/values.
   /// Key order is preserved
-  LinkedHashMap<String, String> getRange(int? startIndex, int? endIndex) {
+  Future<LinkedHashMap<String, String>> getRange(
+      int? startIndex, int? endIndex) async {
     var start = startIndex ?? 0;
     var end = endIndex ?? length - 1;
 
@@ -339,11 +341,11 @@ class IkvPack {
 
     if (_storage != null && !_storage!.useIndexToGetValue) {
       for (var i = start; i <= end; i++) {
-        result[_originalKeys[i]] = value(_originalKeys[i]);
+        result[_originalKeys[i]] = await value(_originalKeys[i]);
       }
     } else {
       for (var i = start; i <= end; i++) {
-        result[_originalKeys[i]] = valueAt(i);
+        result[_originalKeys[i]] = await valueAt(i);
       }
     }
 
@@ -354,51 +356,51 @@ class IkvPack {
 
   @pragma('vm:prefer-inline')
   @pragma('dart2js:tryInline')
-  String valueAt(int index) {
+  Future<String> valueAt(int index) async {
     var bytes = valuesInMemory
         ? decoder.decodeBytes(_values[index])
-        : decoder.decodeBytes(_storage!.valueAt(index));
-    // ? codec.decoder.convert(_values[index])
-    // : codec.decoder.convert(_storage!.valueAt(index));
+        : decoder.decodeBytes(await _storage!.valueAt(index));
+
     var value = utf8.decode(bytes, allowMalformed: true);
     return value;
   }
 
   @pragma('vm:prefer-inline')
   @pragma('dart2js:tryInline')
-  Uint8List valueRawCompressedAt(int index) {
-    var value = valuesInMemory ? _values[index] : _storage!.valueAt(index);
+  Future<Uint8List> valueRawCompressedAt(int index) async {
+    var value =
+        valuesInMemory ? _values[index] : await _storage!.valueAt(index);
 
     return Uint8List.fromList(value);
   }
 
   @pragma('vm:prefer-inline')
   @pragma('dart2js:tryInline')
-  String value(String key) {
+  Future<String> value(String key) async {
     var index = indexOf(key);
     if (index < 0) return ''; //throw 'key not foiund';
 
     return _storage != null && !_storage!.useIndexToGetValue
-        ? utf8.decode(decoder.decodeBytes(_storage!.value(key)),
+        ? utf8.decode(decoder.decodeBytes(await _storage!.value(key)),
             allowMalformed: true)
-        : valueAt(index);
+        : await valueAt(index);
   }
 
   @pragma('vm:prefer-inline')
   @pragma('dart2js:tryInline')
-  Uint8List valueRawCompressed(String key) {
+  Future<Uint8List> valueRawCompressed(String key) async {
     var index = indexOf(key);
     if (index < 0) return Uint8List(0); //throw 'key not foiund';
 
     return _storage != null && !_storage!.useIndexToGetValue
-        ? Uint8List.fromList(_storage!.value(key))
-        : valueRawCompressedAt(index);
+        ? Uint8List.fromList(await _storage!.value(key))
+        : await valueRawCompressedAt(index);
   }
 
   /// Returns decompressed value
   @pragma('vm:prefer-inline')
   @pragma('dart2js:tryInline')
-  String operator [](String key) {
+  Future<String> operator [](String key) async {
     return value(key);
   }
 
@@ -664,8 +666,8 @@ abstract class StorageBase {
   bool get noUpperCaseFlag;
 
   Future<List<String>> readSortedKeys();
-  Uint8List value(String key);
-  Uint8List valueAt(int index);
+  Future<Uint8List> value(String key);
+  Future<Uint8List> valueAt(int index);
   int get sizeBytes;
   Future<Stats> getStats();
   void dispose();
@@ -673,7 +675,7 @@ abstract class StorageBase {
   // the bellow 2 methods are workarounds for passing Storage across isolates,
   // since intenal object RandomAccessFile can't cross isolates boundaries
   // closing file is done in spawned isolate and reopening is done in main isolate
-  void closeFile();
+  void close();
   void reopenFile();
 }
 
@@ -765,7 +767,7 @@ class _IsolateParams {
 void _loadIkv(_IsolateParams params) async {
   try {
     var ikv = await IkvPack.load(params.path, params.keysCaseInsensitive);
-    ikv._storage?.closeFile();
+    ikv._storage?.close();
     params.sendPort.send(ikv);
   } catch (e) {
     params.errorPort.send(e);
@@ -781,7 +783,7 @@ class IkvPooledJob extends PooledJob<IkvPack> {
   @override
   Future<IkvPack> job() async {
     var ikv = await IkvPack.load(path, keysCaseInsensitive);
-    ikv._storage?.closeFile();
+    ikv._storage?.close();
     return ikv;
   }
 }

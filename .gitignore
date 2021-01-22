@@ -19,3 +19,7 @@ doc/api/
 *.js_
 *.js.deps
 *.js.map
+test/performance_data/EN_RU Multitran vol.2.dikt
+test/performance_data/RU_EN Multitran vol.2.dikt
+test/performance_data/100/EN_RU Multitran vol.2.dikt
+test/performance_data/100/RU_EN Multitran vol.2.dikt

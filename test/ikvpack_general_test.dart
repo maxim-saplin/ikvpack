@@ -35,12 +35,12 @@ void main() async {
       expect(ik.containsKey('sdss'), true);
     });
 
-    test('Empty Values are deleted', () {
+    test('Empty Values are deleted', () async {
       var m = <String, String>{'': '', 'wew': 'dsdsd', 'sss': '', 'sdss': 'd'};
       var ik = IkvPack.fromMap(m);
       expect(ik.length, 2);
-      expect(ik['wew'], 'dsdsd');
-      expect(ik['sdss'], 'd');
+      expect(await ik['wew'], 'dsdsd');
+      expect(await ik['sdss'], 'd');
     });
 
     test('Keys are properly sanitized', () {
@@ -57,13 +57,13 @@ void main() async {
       expect(ik.keys[1].length, 255);
     });
 
-    test('Single item key baskets)', () {
+    test('Single item key baskets)', () async {
       var m = <String, String>{'a': 'aaa', 'b': 'bbb', 'c': 'ccc'};
       var ik = IkvPack.fromMap(m);
       expect(ik.length, 3);
-      expect(ik['a'], 'aaa');
-      expect(ik['b'], 'bbb');
-      expect(ik['c'], 'ccc');
+      expect(await ik['a'], 'aaa');
+      expect(await ik['b'], 'bbb');
+      expect(await ik['c'], 'ccc');
     });
   });
   group('In-memory tests, case-insensitive', () {
