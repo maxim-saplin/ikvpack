@@ -14,6 +14,8 @@ const ruFile101 = 'test/performance_data/RU_EN Multitran vol.2.dikt';
 const enFile101 = 'test/performance_data/EN_RU Multitran vol.2.dikt';
 
 void main() async {
+  const skippLongTests = true;
+
   group('Real file tests', () {
     Future<int> loadCurrent(String path, bool keysCaseInsensitive) async {
       var ikv = await IkvPack.load(path, keysCaseInsensitive);
@@ -42,7 +44,7 @@ void main() async {
       ikv100RuInsense.prnt('I100 RU, CASE-INSE', true);
       currentEnInsense.prnt('CURR EN, CASE-INSE', true);
       ikv100EnInsense.prnt('I100 EN, CASE-INSE', true);
-    }, skip: false);
+    }, skip: skippLongTests);
     test('Case-Sensitive, Current version not slower than 1.0.0', () {
       var currentRuSense =
           _benchmark(() => loadCurrent(ruFile101, false), 6, 1);
@@ -55,7 +57,7 @@ void main() async {
       ikv100RuSense.prnt('I100 RU, CASE-SENS', true);
       currentEnSense.prnt('CURR EN, CASE-SENS', true);
       ikv100EnSense.prnt('I100 EN, CASE-SENS', true);
-    }, skip: false);
+    }, skip: skippLongTests);
   });
 
   group('Trying out certain patterns for performance', () {

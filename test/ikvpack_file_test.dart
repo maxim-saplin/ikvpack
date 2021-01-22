@@ -13,7 +13,7 @@ void main() async {
   group('File tests, case-insensitive', () {
     // ikv = IkvPack.fromMap(testMap, true);
     // (ikv!).saveTo('testIkv.dat');
-    setUp(() async {
+    setUpAll(() async {
       setIkv(await IkvPack.load('test/testIkv.dat', true));
     });
 

@@ -27,12 +27,13 @@ class Storage implements StorageBase {
   @override
   bool get noUpperCaseFlag => false;
 
-  late ObjectStore _store;
+  late Database _db;
 
   @override
   Future<List<String>> readSortedKeys() async {
-    _store = await _getStoreInDb(path);
-    var request = _store.getAllKeys(null);
+    _db = await _getDb(path);
+    var store = await _getStoreInDb(_db);
+    var request = store.getAllKeys(null);
     var completer = Completer<List<String>>();
     request.onSuccess.listen((_) {
       var s = request.result as List<dynamic>;
@@ -56,8 +57,10 @@ class Storage implements StorageBase {
 
   @override
   Future<Uint8List> value(String key) async {
-    //_store.getObject(key));
-    return Uint8List(0);
+    var store = await _getStoreInDb(_db);
+    var bytes = await store.getObject(key) as ByteBuffer;
+    var list = bytes.asUint8List();
+    return list;
   }
 
   @override
@@ -79,8 +82,7 @@ Future<Database> _getDb(String path) async {
   return db;
 }
 
-Future<ObjectStore> _getStoreInDb(String path) async {
-  var db = await _getDb(path);
+Future<ObjectStore> _getStoreInDb(Database db) async {
   return db.transaction(_storeName, 'readonly').objectStore(_storeName);
 }
 
@@ -90,6 +92,7 @@ Future<void> saveToPath(
 
   print('Inserting keys to IndexedDB..');
   await insert(db, keys, values);
+  db.close();
   print('Keys inserted to IndexedDB');
 }
 

@@ -65,9 +65,21 @@ void main() async {
       expect(await ik['b'], 'bbb');
       expect(await ik['c'], 'ccc');
     });
+
+    test('Non unique keys dont break anything', () async {
+      // ignore: equal_keys_in_map
+      var m = <String, String>{'a': 'aaa', 'a': 'aaa2', 'b': 'bbb', 'c': 'ccc'};
+      var ik = IkvPack.fromMap(m);
+      expect(ik.length, 3);
+      var a = await ik['a'];
+      expect(a == 'aaa' || a == 'aaa2', true);
+      expect(await ik['b'], 'bbb');
+      expect(await ik['c'], 'ccc');
+    });
   });
+
   group('In-memory tests, case-insensitive', () {
-    setUp(() {
+    setUpAll(() {
       setIkv(IkvPack.fromMap(testMap, true));
     });
 
@@ -81,7 +93,7 @@ void main() async {
   });
 
   group('In-memory tests, case-sensitive', () {
-    setUp(() {
+    setUpAll(() {
       setIkv(IkvPack.fromMap(testMap, false));
     });
 

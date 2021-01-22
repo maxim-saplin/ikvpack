@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:archive/archive_io.dart';
 import 'package:ikvpack/ikvpack.dart';
 import 'package:ikvpack/src/ikvpack.dart';
 import 'package:test/test.dart';
@@ -55,11 +58,18 @@ void runCaseInvariantTests() {
   test('Can get raw uncompressed value', () async {
     var v = await _ikv.valueRawCompressed('зараць');
     expect(v.isNotEmpty, true);
-    v = await _ikv.valueRawCompressedAt(2);
+    var index = _ikv.indexOf('зараць');
+    var uncompressed = '<div>вспахать</div>';
+    var utf = utf8.encode(uncompressed);
+    var compressed = ZLibEncoder().encode(utf);
+    v = await _ikv.valueRawCompressedAt(index);
     expect(v.isNotEmpty, true);
+    expect(compressed.length, v.length);
+    expect(compressed[0], v[0]);
+    expect(compressed[compressed.length - 1], v[compressed.length - 1]);
   });
 
-  test('Key keysStartingWith() finds the key', () {
+  test('keysStartingWith() finds the key', () {
     var keys = _ikv.keysStartingWith('aerosol', 3);
     expect(keys[0], 'aerosol bomb');
   });

@@ -359,7 +359,9 @@ class IkvPack {
   Future<String> valueAt(int index) async {
     var bytes = valuesInMemory
         ? decoder.decodeBytes(_values[index])
-        : decoder.decodeBytes(await _storage!.valueAt(index));
+        : decoder.decodeBytes(_storage!.useIndexToGetValue
+            ? await _storage!.valueAt(index)
+            : await _storage!.value(_originalKeys[index]));
 
     var value = utf8.decode(bytes, allowMalformed: true);
     return value;
@@ -368,10 +370,13 @@ class IkvPack {
   @pragma('vm:prefer-inline')
   @pragma('dart2js:tryInline')
   Future<Uint8List> valueRawCompressedAt(int index) async {
-    var value =
-        valuesInMemory ? _values[index] : await _storage!.valueAt(index);
+    var bytes = valuesInMemory
+        ? _values[index]
+        : _storage!.useIndexToGetValue
+            ? await _storage!.valueAt(index)
+            : await _storage!.value(_originalKeys[index]);
 
-    return Uint8List.fromList(value);
+    return bytes;
   }
 
   @pragma('vm:prefer-inline')
