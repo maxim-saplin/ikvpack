@@ -32,13 +32,13 @@ class Storage implements StorageBase {
   @override
   Future<List<String>> readSortedKeys() async {
     _db = await _getDb(path);
-    var store = await _getStoreInDb(_db);
-    var request = store.getAllKeys(null);
+    var store = await _getStoreKeyInDb(_db);
+    var request = store.getAll(null);
     var completer = Completer<List<String>>();
     request.onSuccess.listen((_) {
       var s = request.result as List<dynamic>;
-      var ss = s.cast<String>();
-      completer.complete(ss);
+      var k = s.cast<String>();
+      completer.complete(k);
     });
     request.onError.listen((_) {
       completer.completeError(request.error!);
@@ -53,37 +53,49 @@ class Storage implements StorageBase {
   int get sizeBytes => -1;
 
   @override
-  bool get useIndexToGetValue => false;
+  bool get useIndexToGetValue => true;
 
   @override
   Future<Uint8List> value(String key) async {
-    var store = await _getStoreInDb(_db);
-    var bytes = await store.getObject(key) as ByteBuffer;
-    var list = bytes.asUint8List();
-    return list;
+    // var store = await _getStoreInDb(_db);
+    // var bytes = await store.getObject(key) as ByteBuffer;
+    // var list = bytes.asUint8List();
+    // return list;
+    throw UnimplementedError();
   }
 
   @override
-  Future<Uint8List> valueAt(int index) {
-    throw UnimplementedError();
+  Future<Uint8List> valueAt(int index) async {
+    var store = await _getStoreValueInDb(_db);
+    var bytes = await store.getObject(index) as ByteBuffer;
+    var list = bytes.asUint8List();
+    return list;
   }
 }
 
-const String _storeName = 'ikv';
+const String _storeKeys = 'keys';
+const String _storeValues = 'values';
 
 Future<Database> _getDb(String path) async {
   var db = await window.indexedDB!.open(path, version: 1, onUpgradeNeeded: (e) {
     var db = e.target.result as Database;
-    if (!db.objectStoreNames!.contains(_storeName)) {
-      db.createObjectStore(_storeName);
+    if (!db.objectStoreNames!.contains(_storeKeys)) {
+      db.createObjectStore(_storeKeys);
+    }
+    if (!db.objectStoreNames!.contains(_storeValues)) {
+      db.createObjectStore(_storeValues);
     }
   });
 
   return db;
 }
 
-Future<ObjectStore> _getStoreInDb(Database db) async {
-  return db.transaction(_storeName, 'readonly').objectStore(_storeName);
+Future<ObjectStore> _getStoreKeyInDb(Database db) async {
+  return db.transaction(_storeKeys, 'readonly').objectStore(_storeKeys);
+}
+
+Future<ObjectStore> _getStoreValueInDb(Database db) async {
+  return db.transaction(_storeValues, 'readonly').objectStore(_storeValues);
 }
 
 Future<void> saveToPath(

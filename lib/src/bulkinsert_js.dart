@@ -9,7 +9,7 @@ import 'package:js/js_util.dart';
 bool _bulkInsertInitialized = false;
 
 const String _bulkInsert =
-    'function bulkInsert(o,n,t){return new Promise((e,r)=>{let c;const s=o.transaction(["ikv"],"readwrite");s.oncomplete=function(){e(c)},s.onerror=function(o){r(o.target.error)};const u=s.objectStore("ikv");for(var l=0;l<n.length;l++){const o=u.put(t[l].buffer,n[l]);l==n.length-1&&(o.onsuccess=function(){c=o.result})}})}function testArrays(o,n){console.log(o),console.log(n)}';
+    'function bulkInsert(e,t,o){return new Promise((n,r)=>{const c=e.transaction(["keys"],"readwrite");c.oncomplete=function(){n(void 0)},c.onerror=function(e){r(e.target.error)};const s=e.transaction(["values"],"readwrite");s.oncomplete=function(){n(void 0)},s.onerror=function(e){r(e.target.error)};const u=c.objectStore("keys"),a=s.objectStore("values");for(var i=0;i<t.length;i++){a.add(o[i].buffer,i);const e=u.add(t[i],i);i==t.length-1&&(e.onsuccess=function(){kResult=e.result})}})}';
 
 Future<void> insert(dynamic db, List<String> keys, List<Uint8List> values) {
   if (!_bulkInsertInitialized) {
@@ -32,29 +32,33 @@ Future<void> toFuture(Object promise) {
 
 // function bulkInsert(db, keys, values) {
 //   return new Promise((resolve, reject) => {
-//     let result;
-//     const tx = db.transaction(["ikv"], "readwrite");
-//     tx.oncomplete = function() {
-//       resolve(result);
+//     let kKesult;
+//     const txKeys = db.transaction(["keys"], "readwrite");
+//     txKeys.oncomplete = function() {
+//       resolve(kKesult);
 //     };
-//     tx.onerror = function(event) {
+//     txKeys.onerror = function(event) {
 //       reject(event.target.error);
 //     }
-//     const store = tx.objectStore("ikv");
+//     let vResult;
+//     const txValues = db.transaction(["values"], "readwrite");
+//     txValues.oncomplete = function() {
+//       resolve(vResult);
+//     };
+//     txValues.onerror = function(event) {
+//       reject(event.target.error);
+//     }
+//     const k = txKeys.objectStore("keys");
+//     const v = txValues.objectStore("values");
 //     for (var i = 0; i < keys.length; i++)
 //     {
-//       const request = store.put(values[i].buffer, keys[i]);
+//       v.add(values[i].buffer, i);
+//       const request = k.add(keys[i], i);
 //       if (i == keys.length-1) {
 //         request.onsuccess = function() {
-//            result = request.result;
+//            kResult = request.result;
 //         }
 //       }
 //     }
-
 //   });
-// }
-
-// function testArrays(keys, values) {
-//   console.log(keys);
-//   console.log(values);
 // }

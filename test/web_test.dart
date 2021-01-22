@@ -7,40 +7,25 @@ import 'testMap.dart';
 
 void main() async {
   group('Web/IndexedDB tests, db, case-insensitive', () {
-    // ikv = IkvPack.fromMap(testMap, true);
-    // (ikv!).saveTo('testIkv.dat');
-    // setUpAll(() async {
-    //   var ik = IkvPack.fromMap(testMap);
-    //   await ik.saveTo('test/testIkv.dat');
-    //   setIkv(await IkvPack.load('test/testIkv.dat', true));
-    // });
-
-    test('keysStartingWith() finds the key', () async {
+    setUpAll(() async {
       var ik = IkvPack.fromMap(testMap);
       await ik.saveTo('test/testIkv.dat');
-      ik = await IkvPack.load('test/testIkv.dat', true);
-
-      for (var i = 0; i < 100; i++) {
-        print(ik.keys[i]);
-      }
-
-      //var keys = ik.keysStartingWith('aerosol', 3);
-      //expect(keys.length, 1);
-      //expect(keys[0], 'aerosol bomb');
+      setIkv(await IkvPack.load('test/testIkv.dat', true));
     });
 
-    // runCaseInvariantTests();
-    // runCaseInsensitiveTests();
+    runCaseInvariantTests();
+    runCaseInsensitiveTests();
   });
-  // group('Web/IndexedDB tests, in-memory case-insensitive', () {
-  //   setUpAll(() {
-  //     var ik = IkvPack.fromMap(testMap);
-  //     setIkv(ik);
-  //   });
 
-  //   runCaseInvariantTests();
-  //   runCaseInsensitiveTests();
-  // });
+  group('Web/IndexedDB tests, in-memory case-insensitive', () {
+    setUpAll(() {
+      var ik = IkvPack.fromMap(testMap);
+      setIkv(ik);
+    });
+
+    runCaseInvariantTests();
+    runCaseInsensitiveTests();
+  });
 
   // test('Same keys are read back', () async {
   //   var m = <String, String>{'wew': 'dsdsd', 'sdss': 'd'};
