@@ -1,3 +1,7 @@
+import 'dart:html';
+import 'dart:indexed_db';
+import 'dart:math';
+
 @TestOn('chrome')
 import 'package:ikvpack/ikvpack.dart';
 import 'package:test/test.dart';
@@ -50,6 +54,37 @@ void main() async {
       expect(await ik['a'], 'aaa');
       expect(await ik['b'], 'bbb');
       expect(await ik['c'], 'ccc');
+    });
+
+    test('IndexedDB can be deleted', () async {
+      var m = <String, String>{'a': 'aaa', 'b': 'bbb', 'c': 'ccc'};
+      var ik = IkvPack.fromMap(m);
+
+      expect(ik.length, 3);
+
+      await ik.saveTo('tmp/test2.dat');
+
+      var exists = false;
+
+      var db = await window.indexedDB!.open('tmp/test2.dat');
+      if (db.objectStoreNames!.contains('keys')) {
+        exists = true;
+      }
+
+      expect(exists, true);
+      db.close();
+      IkvPack.delete('tmp/test2.dat');
+
+      await Future.delayed(Duration(milliseconds: 100));
+
+      exists = false;
+
+      db = await window.indexedDB!.open('tmp/test2.dat');
+      if (db.objectStoreNames!.contains('keys')) {
+        exists = true;
+      }
+
+      expect(exists, false);
     });
   });
 }
