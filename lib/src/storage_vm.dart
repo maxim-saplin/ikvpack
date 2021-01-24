@@ -29,7 +29,7 @@ import 'ikvpack.dart';
 /// - [Values] section
 ///   - Stream of bytes where beginning and end of certain value bytes is determind
 ///     by [Value offsets section]
-class Storage implements StorageBase {
+class Storage extends StorageBase {
   Storage(this.path) : _file = File(path).openSync();
 
   RandomAccessFile? _file;

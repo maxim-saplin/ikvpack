@@ -165,32 +165,19 @@ class IkvPack {
   /// when a value is needed. fromMap() constructor stores everythin in memory
   bool get valuesInMemory => _valuesInMemory;
 
-  /// String values are compressed via Zlib
+  /// String values are compressed via Zlib, stored that way and are decompresed when values fetched
   IkvPack.fromMap(Map<String, String> map,
       [this.keysCaseInsensitive = true,
       Function(int progressPercent)? updateProgress])
       : _valuesInMemory = true,
         _storage = null {
-    var entries = _getSortedEntries(map);
+    var entries = _getSortedEntriesFromMap(map);
     if (updateProgress != null) updateProgress(5);
 
-    _originalKeys =
-        List.generate(entries.length, (i) => entries[i].key, growable: false);
+    _buildOriginalKeys(entries);
     if (updateProgress != null) updateProgress(10);
 
-    if (keysCaseInsensitive) {
-      _shadowKeysUsed = true;
-      _shadowKeys = List.generate(
-          entries.length, (i) => entries[i].keyLowerCase,
-          growable: false);
-    } else {
-      _shadowKeysUsed = false;
-    }
-
-    if (updateProgress != null) updateProgress(15);
-
-    // var utfLength = 0;
-    // var zipLength = 0;
+    _buildShadowKeys(entries);
 
     var progress = 15;
     var prevProgress = 15;
@@ -217,15 +204,89 @@ class IkvPack {
     if (updateProgress != null) updateProgress(100);
   }
 
-  List<_Triple> _getSortedEntries(Map<String, String> map) {
+  IkvPack.fromBytes(ByteData bytes,
+      [this.keysCaseInsensitive = true,
+      Function(int progressPercent)? updateProgress])
+      : _valuesInMemory = true,
+        _storage = null {
+    var t = parseBinary(bytes);
+    var entries = _getSortedEntriesFromLists(t.item1, t.item2);
+    if (updateProgress != null) updateProgress(5);
+
+    _buildOriginalKeys(entries);
+    if (updateProgress != null) updateProgress(10);
+
+    _buildShadowKeys(entries);
+
+    _values = t.item2;
+
+    if (updateProgress != null) updateProgress(95);
+
+    _keysReadOnly = UnmodifiableListView<String>(_originalKeys);
+    _buildBaskets();
+    if (updateProgress != null) updateProgress(100);
+  }
+
+  void _buildShadowKeys(List<_Triple> entries) {
+    if (keysCaseInsensitive) {
+      _shadowKeysUsed = true;
+      _shadowKeys = List.generate(
+          entries.length, (i) => entries[i].keyLowerCase,
+          growable: false);
+    } else {
+      _shadowKeysUsed = false;
+    }
+  }
+
+  void _buildOriginalKeys(List<_Triple> entries) {
+    _originalKeys =
+        List.generate(entries.length, (i) => entries[i].key, growable: false);
+  }
+
+  List<_Triple> _getSortedEntriesFromMap(Map<String, String> map) {
     assert(map.isNotEmpty, 'Key/Value map can\'t be empty');
 
-    Iterable<_Triple>? entries;
+    Iterable<_Triple<String>>? entries;
 
     if (keysCaseInsensitive) {
-      entries = map.entries.map((e) => _Triple(e.key, e.value));
+      entries =
+          map.entries.map((e) => _Triple<String>.lowerCase(e.key, e.value));
     } else {
-      entries = map.entries.map((e) => _Triple.noLowerCase(e.key, e.value));
+      entries =
+          map.entries.map((e) => _Triple<String>.noLowerCase(e.key, e.value));
+    }
+
+    var list = _fixKeysAndValues(entries);
+
+    assert(list.isNotEmpty, 'Refined Key/Value collection can\'t be empty');
+
+    if (keysCaseInsensitive) {
+      list.sort((e1, e2) => e1.keyLowerCase.compareTo(e2.keyLowerCase));
+    } else {
+      list.sort((e1, e2) => e1.key.compareTo(e2.key));
+    }
+
+    return list;
+  }
+
+  List<_Triple> _getSortedEntriesFromLists(
+      List<String> keys, List<Uint8List> values) {
+    assert(keys.isNotEmpty, 'Keys can\'t be empty');
+    assert(values.isNotEmpty, 'Values can\'t be empty');
+    if (keys.length != values.length) {
+      throw 'keys.length isn\'t equal to values.length';
+    }
+
+    Iterable<_Triple<Uint8List>>? entries;
+
+    if (keysCaseInsensitive) {
+      entries = List<_Triple<Uint8List>>.generate(keys.length,
+          (index) => _Triple<Uint8List>.lowerCase(keys[index], values[index]));
+    } else {
+      entries = List<_Triple<Uint8List>>.generate(
+          keys.length,
+          (index) =>
+              _Triple<Uint8List>.noLowerCase(keys[index], values[index]));
     }
 
     var list = _fixKeysAndValues(entries);
@@ -252,7 +313,7 @@ class IkvPack {
 
         if (s.isNotEmpty) {
           if (s.length > 255) s = s.substring(0, 255);
-          fixed.add(_Triple(s, e.value));
+          fixed.add(_Triple.lowerCase(s, e.value));
         }
       }
     }
@@ -665,8 +726,6 @@ class Stats {
 }
 
 abstract class StorageBase {
-  StorageBase(String path);
-
   bool get noOutOfOrderFlag;
   bool get noUpperCaseFlag;
 
@@ -684,6 +743,65 @@ abstract class StorageBase {
   void reopenFile();
 }
 
+Tupple<List<String>, List<Uint8List>> parseBinary(ByteData data) {
+  // ignore: unused_local_variable
+  var flags = data.getInt32(0); //_readUint32(f, Endian.big);
+  var length = data.getInt32(4);
+  var offsetsOffset = data.getInt32(8);
+  var valuesOffset = data.getInt32(12);
+  const keyStart = 16;
+
+  if (valuesOffset - offsetsOffset != length * 8) {
+    throw 'Invalid data, number of offset entires doesn\'t match the length';
+  }
+
+  if (data.lengthInBytes <= offsetsOffset) {
+    throw 'Invalid data, file to short (offsetsOffset)';
+  }
+
+  if (data.lengthInBytes <= valuesOffset) {
+    throw 'Invalid data, file to short (valuesOffset)';
+  }
+
+  var prev = keyStart;
+
+  var decoder = Utf8Decoder(allowMalformed: true);
+
+  var keys = List<String>.generate(length, (index) {
+    var length = data.getUint16(prev);
+    prev += 2;
+    var view = Uint8List.view(data.buffer, prev, length);
+    var key = decoder.convert(view);
+    prev += length;
+
+    return key;
+  }, growable: false);
+
+  if (keys.length != length) {
+    throw 'Invalid data, number of keys read doesnt match number in headers';
+  }
+
+  prev = offsetsOffset;
+
+  var values = List<Uint8List>.generate(length, (index) {
+    var offset = data.getUint32(prev);
+    prev += 4;
+    var length = data.getUint32(prev);
+    prev += 4;
+    var view = Uint8List.view(data.buffer, offset, length);
+
+    return Uint8List.fromList(view);
+  }, growable: false);
+
+  if (values.length != length) {
+    throw 'Invalid data, number of values read doesnt match number in headers';
+  }
+
+  var result = Tupple(keys, values);
+
+  return result;
+}
+
 class _KeyBasket {
   final int firstLetter;
   final int startIndex;
@@ -695,12 +813,12 @@ class _KeyBasket {
   int get length => endIndex - startIndex;
 }
 
-class _Triple {
+class _Triple<T> {
   final String key;
   final String keyLowerCase;
-  final String value;
+  final T value;
 
-  _Triple(this.key, this.value)
+  _Triple.lowerCase(this.key, this.value)
       : keyLowerCase = _fixOutOfOrder(key.toLowerCase());
 
   _Triple.noLowerCase(this.key, this.value) : keyLowerCase = '';

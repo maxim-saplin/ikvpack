@@ -3,6 +3,7 @@ import 'package:ikvpack/src/ikvpack.dart';
 import 'package:test/test.dart';
 
 import 'shared.dart';
+import 'testBytes.dart';
 import 'testMap.dart';
 
 void main() async {
@@ -78,7 +79,7 @@ void main() async {
     });
   });
 
-  group('In-memory tests, case-insensitive', () {
+  group('In-memory tests (Map), case-insensitive', () {
     setUpAll(() {
       setIkv(IkvPack.fromMap(testMap, true));
     });
@@ -116,11 +117,20 @@ void main() async {
     }, testOn: 'vm');
   });
 
-  group('In-memory tests, case-sensitive', () {
+  group('In-memory tests (Map), case-sensitive', () {
     setUpAll(() {
       setIkv(IkvPack.fromMap(testMap, false));
     });
 
     runCaseInvariantTests();
+  });
+
+  group('In-memory tests (ByteData), case-insensitive', () {
+    setUpAll(() {
+      setIkv(IkvPack.fromBytes(testBytes.buffer.asByteData(), true));
+    });
+
+    runCaseInvariantTests();
+    runCaseInsensitiveTests();
   });
 }

@@ -1,6 +1,4 @@
 import 'dart:html';
-import 'dart:indexed_db';
-import 'dart:math';
 
 @TestOn('chrome')
 import 'package:ikvpack/ikvpack.dart';

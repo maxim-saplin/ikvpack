@@ -9,7 +9,29 @@ import 'package:test/test.dart';
 import 'shared.dart';
 
 void main() async {
+  // Used to generate test data
+  // ignore: unused_element
+  void saveTestMapBytes() {
+    var bytes = File('test/testIkv.dat').readAsBytesSync();
+    var sb = StringBuffer();
+
+    sb.writeln('import \'dart:typed_data\';\n');
+
+    sb.write('final testBytes = Uint8List.fromList([');
+    for (var i = 0; i < bytes.length; i++) {
+      sb.write(bytes[i]);
+      if (i != bytes.length - 1) {
+        sb.write(', ');
+      }
+    }
+
+    sb.write(']);');
+
+    File('test/testBytes.dart').writeAsString(sb.toString());
+  }
+
   group('File tests, case-insensitive', () {
+    //saveTestMapBytes();
     // ikv = IkvPack.fromMap(testMap, true);
     // (ikv!).saveTo('testIkv.dat');
     setUpAll(() async {
