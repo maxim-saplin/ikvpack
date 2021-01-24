@@ -5,6 +5,8 @@ import 'package:ikvpack/ikvpack.dart';
 import 'package:ikvpack/src/ikvpack.dart';
 import 'package:test/test.dart';
 
+import 'testBytes.dart';
+
 late IkvPack _ikv;
 
 void setIkv(IkvPack ikv) {
@@ -157,5 +159,55 @@ void runCaseInsensitiveTests() {
 
     var keys = IkvPack.consolidatedKeysStartingWith(ikvs, 'w');
     expect(keys.contains('Wew'), true);
+  });
+}
+
+void runStorageInvariantTests() {
+  test('Same data is read back', () async {
+    var m = <String, String>{'a': 'aaa', 'b': 'bbb', 'c': 'ccc'};
+    var ik = IkvPack.fromMap(m);
+
+    expect(ik.length, 3);
+    expect(await ik['a'], 'aaa');
+    expect(await ik['b'], 'bbb');
+    expect(await ik['c'], 'ccc');
+
+    await ik.saveTo('tmp/test.dat');
+    ik = await IkvPack.load('tmp/test.dat');
+
+    expect(ik.length, 3);
+    expect(await ik['a'], 'aaa');
+    expect(await ik['b'], 'bbb');
+    expect(await ik['c'], 'ccc');
+  });
+
+  test('Same data is read back (w. IkvMap.fromBytes)', () async {
+    var ik = IkvPack.fromBytes(testBytes.buffer.asByteData());
+
+    expect(ik.length, 1436);
+    expect(await ik['nonechoic'],
+        '<div><i>adjective</i></div><div>not echoic or imitative of sound</div><div><span>•</span> <i>Ant</i>: ↑<a href=echoic>echoic</a></div>');
+
+    await ik.saveTo('tmp/test.dat');
+    ik = await IkvPack.load('tmp/test.dat');
+
+    expect(ik.length, 1436);
+    expect(await ik['nonechoic'],
+        '<div><i>adjective</i></div><div>not echoic or imitative of sound</div><div><span>•</span> <i>Ant</i>: ↑<a href=echoic>echoic</a></div>');
+  });
+
+  test('Saving to eixting path rewrites what\'s there', () async {
+    var m = <String, String>{'a': 'aaa', 'b': 'bbb', 'c': 'ccc'};
+    var ik = IkvPack.fromMap(m);
+
+    await ik.saveTo('tmp/test.dat');
+    ik = await IkvPack.load('tmp/test.dat');
+    expect(ik.length, 3);
+
+    m = <String, String>{'z': 'zzz', 'y': 'yyyy'};
+    ik = IkvPack.fromMap(m);
+    await ik.saveTo('tmp/test.dat');
+    ik = await IkvPack.load('tmp/test.dat');
+    expect(ik.length, 2);
   });
 }

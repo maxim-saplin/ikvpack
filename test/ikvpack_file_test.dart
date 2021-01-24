@@ -43,6 +43,7 @@ void main() async {
   });
 
   group('File tests', () {
+    runStorageInvariantTests();
     test('Disposed ikv cant be used anymore', () async {
       var m = <String, String>{'a': 'aaa', 'b': 'bbb', 'c': 'ccc'};
       var ik = IkvPack.fromMap(m);
@@ -125,24 +126,6 @@ void main() async {
 
       IkvPack.delete('tmp/test2.dat');
       expect(File('tmp/test2.dat').existsSync(), false);
-    });
-
-    test('Same data is read back', () async {
-      var m = <String, String>{'a': 'aaa', 'b': 'bbb', 'c': 'ccc'};
-      var ik = IkvPack.fromMap(m);
-
-      expect(ik.length, 3);
-      expect(await ik['a'], 'aaa');
-      expect(await ik['b'], 'bbb');
-      expect(await ik['c'], 'ccc');
-
-      await ik.saveTo('tmp/test.dat');
-      ik = await IkvPack.load('tmp/test.dat');
-
-      expect(ik.length, 3);
-      expect(await ik['a'], 'aaa');
-      expect(await ik['b'], 'bbb');
-      expect(await ik['c'], 'ccc');
     });
 
     test(
