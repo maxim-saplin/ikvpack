@@ -6,15 +6,24 @@ import 'dart:typed_data';
 import 'bulkinsert_js.dart';
 import 'ikvpack.dart';
 
+final _connections = <String, Database>{}; // Path, DB
+
 class Storage implements StorageBase {
   Storage(this.path);
   final String path;
 
-  @override
-  void close() {}
+  bool _disposed = false;
 
   @override
-  void dispose() {}
+  void close() {
+    _closeDbAt(path);
+  }
+
+  @override
+  void dispose() {
+    close();
+    _disposed = true;
+  }
 
   @override
   Future<Stats> getStats() {
@@ -31,7 +40,11 @@ class Storage implements StorageBase {
 
   @override
   Future<List<String>> readSortedKeys() async {
+    if (_disposed) throw 'Storage object was disposed, cant use it';
     _db = await _getDb(path);
+    if (!_connections.containsKey(path)) {
+      _connections[path] = _db;
+    }
     var store = await _getKeyStoreInDb(_db);
     var request = store.getAll(null);
     var completer = Completer<List<String>>();
@@ -72,7 +85,12 @@ class Storage implements StorageBase {
 const String _storeKeys = 'keys';
 const String _storeValues = 'values';
 
-Future<Database> _getDb(String path) async {
+Future<Database> _getDb(String path, [bool clear = false]) async {
+  if (clear) {
+    _closeDbAt(path);
+    await window.indexedDB!.deleteDatabase(path);
+  }
+
   var db = await window.indexedDB!.open(path, version: 1, onUpgradeNeeded: (e) {
     var db = e.target.result as Database;
     if (!db.objectStoreNames!.contains(_storeKeys)) {
@@ -86,6 +104,13 @@ Future<Database> _getDb(String path) async {
   return db;
 }
 
+void _closeDbAt(String path) {
+  if (_connections.containsKey(path)) {
+    _connections[path]?.close();
+    _connections.remove(path);
+  }
+}
+
 Future<ObjectStore> _getKeyStoreInDb(Database db) async {
   return db.transaction(_storeKeys, 'readonly').objectStore(_storeKeys);
 }
@@ -96,15 +121,16 @@ Future<ObjectStore> _getValueStoreInDb(Database db) async {
 
 Future<void> saveToPath(
     String path, List<String> keys, List<Uint8List> values) async {
-  var db = await _getDb(path);
+  var db = await _getDb(path, true);
 
-  print('Inserting keys to IndexedDB..');
+  print('Inserting keys to IndexedDB ${path}');
   await insert(db, keys, values);
   db.close();
   print('Keys inserted to IndexedDB');
 }
 
 void deleteFromPath(String path) {
+  _closeDbAt(path);
   window.indexedDB!.deleteDatabase(path);
 }
 

@@ -199,15 +199,20 @@ void runStorageInvariantTests() {
   test('Saving to eixting path rewrites what\'s there', () async {
     var m = <String, String>{'a': 'aaa', 'b': 'bbb', 'c': 'ccc'};
     var ik = IkvPack.fromMap(m);
-
+    print('Map created');
     await ik.saveTo('tmp/test.dat');
+    print('Saved');
     ik = await IkvPack.load('tmp/test.dat');
+    print('Loaded');
     expect(ik.length, 3);
 
     m = <String, String>{'z': 'zzz', 'y': 'yyyy'};
     ik = IkvPack.fromMap(m);
+    print('Map created');
     await ik.saveTo('tmp/test.dat');
+    print('Saved');
     ik = await IkvPack.load('tmp/test.dat');
+    print('Loaded');
     expect(ik.length, 2);
   });
 }

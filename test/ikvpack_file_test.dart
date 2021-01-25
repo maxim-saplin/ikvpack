@@ -57,8 +57,13 @@ void main() async {
       ik = await IkvPack.load('tmp/test.dat');
       ik.dispose();
 
-      expect(ik.length, 3);
-      expect(() async => await ik['a'], throwsException);
+      var thrown = false;
+      try {
+        var _ = await ik['a'];
+      } catch (_) {
+        thrown = true;
+      }
+      expect(thrown, true);
     });
 
     test('IkvPack can be loaded in isolate', () async {

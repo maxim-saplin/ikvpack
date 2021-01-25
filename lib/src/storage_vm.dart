@@ -45,8 +45,15 @@ class Storage extends StorageBase {
 
   @override
   void dispose() {
-    _file?.closeSync();
+    close();
     _disposed = true;
+  }
+
+// Workaround for Isolates
+  @override
+  void close() {
+    _file?.close();
+    _file = null;
   }
 
   final String path;
@@ -156,19 +163,13 @@ class Storage extends StorageBase {
 
   @override
   Future<Uint8List> valueAt(int index) async {
-    //var o = _offsets[index];
+    if (_disposed) throw 'Storage object was disposed, cant use it';
     var offset = _valuesOffsets!.getUint32(index * 8);
     var length = _valuesOffsets!.getUint32(index * 8 + 4);
     var f = _file as RandomAccessFile;
     f.setPositionSync(offset);
     var value = await f.read(length);
     return value;
-  }
-
-  @override
-  void close() {
-    _file?.close();
-    _file = null;
   }
 
   @override
@@ -181,6 +182,7 @@ class Storage extends StorageBase {
 
   @override
   Future<Stats> getStats() async {
+    if (_disposed) throw 'Storage object was disposed, cant use it';
     var keys = await readSortedKeys();
 
     var keysNumber = _length;
