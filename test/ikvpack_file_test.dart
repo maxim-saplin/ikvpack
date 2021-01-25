@@ -7,6 +7,7 @@ import 'package:ikvpack/src/isolate_helpers.dart';
 import 'package:test/test.dart';
 
 import 'shared.dart';
+import 'testMap.dart';
 
 void main() async {
   // Used to generate test data
@@ -31,9 +32,9 @@ void main() async {
   }
 
   group('File tests, case-insensitive', () {
-    //saveTestMapBytes();
-    // ikv = IkvPack.fromMap(testMap, true);
-    // (ikv!).saveTo('testIkv.dat');
+    // saveTestMapBytes();
+    // var ikv = IkvPack.fromMap(testMap, true);
+    // ikv.saveTo('testIkv.dat');
     setUpAll(() async {
       setIkv(await IkvPack.load('test/testIkv.dat', true));
     });
@@ -110,12 +111,12 @@ void main() async {
     });
 
     test('Files size is properly returned', () async {
-      expect((await IkvPack.load('test/testIkv.dat')).sizeBytes, 272695);
+      expect((await IkvPack.load('test/testIkv.dat')).sizeBytes, 264079);
     });
 
     test('IkvInfo is properly returned', () async {
       var info = await IkvPack.getInfo('test/testIkv.dat');
-      expect(info.sizeBytes, 272695);
+      expect(info.sizeBytes, 264079);
       expect(info.length, 1436);
     });
 

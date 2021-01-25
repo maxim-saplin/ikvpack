@@ -63,7 +63,7 @@ void runCaseInvariantTests() {
     var index = _ikv.indexOf('зараць');
     var uncompressed = '<div>вспахать</div>';
     var utf = utf8.encode(uncompressed);
-    var compressed = ZLibEncoder().encode(utf);
+    var compressed = Deflate(utf).getBytes();
     v = await _ikv.valueRawCompressedAt(index);
     expect(v.isNotEmpty, true);
     expect(compressed.length, v.length);

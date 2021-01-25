@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:isolate';
 import 'dart:math';
 import 'dart:typed_data';
@@ -127,8 +126,8 @@ class IkvPack {
   // UPD: Though caught strange out-of=memory exception on version 3.0-nullsafe
   // Decided to used standrad Dart's codec
   // UPD2: Turned out dart:io is requried for standard compressor, revertimg to archive
-  final ZLibDecoder decoder = ZLibDecoder();
-  final ZLibEncoder encoder = ZLibEncoder();
+  // final ZLibDecoder decoder = ZLibDecoder();
+  // final ZLibEncoder encoder = ZLibEncoder();
 
   // final ZLibCodec codec = ZLibCodec(
   //     level: 7,
@@ -171,7 +170,8 @@ class IkvPack {
 
     _values = List.generate(entries.length, (i) {
       var utf = utf8.encode(entries[i].value);
-      var zip = Uint8List.fromList(encoder.encode(utf));
+      //var zip = Uint8List.fromList(encoder.encode(utf));
+      var zip = Uint8List.fromList(Deflate(utf).getBytes());
       if (updateProgress != null) {
         progress = (15 + 80 * i / entries.length).round();
         if (progress != prevProgress) {
@@ -231,7 +231,8 @@ class IkvPack {
 
     for (var i = 0; i < entries.length; i++) {
       var utf = utf8.encode(entries[i].value);
-      var zip = Uint8List.fromList(ikv.encoder.encode(utf));
+      //var zip = Uint8List.fromList(ikv.encoder.encode(utf));
+      var zip = Uint8List.fromList(Deflate(utf).getBytes());
       if (updateProgress != null) {
         progress = (15 + 80 * i / entries.length).round();
         if (progress != prevProgress) {
@@ -469,10 +470,11 @@ class IkvPack {
   @pragma('dart2js:tryInline')
   Future<String> valueAt(int index) async {
     var bytes = valuesInMemory
-        ? decoder.decodeBytes(_values[index])
-        : decoder.decodeBytes(_storage!.useIndexToGetValue
-            ? await _storage!.valueAt(index)
-            : await _storage!.value(_originalKeys[index]));
+        ? Inflate(_values[index]).getBytes()
+        : Inflate(_storage!.useIndexToGetValue
+                ? await _storage!.valueAt(index)
+                : await _storage!.value(_originalKeys[index]))
+            .getBytes();
 
     var value = utf8.decode(bytes, allowMalformed: true);
     return value;
@@ -497,7 +499,7 @@ class IkvPack {
     if (index < 0) return ''; //throw 'key not foiund';
 
     return _storage != null && !_storage!.useIndexToGetValue
-        ? utf8.decode(decoder.decodeBytes(await _storage!.value(key)),
+        ? utf8.decode(Inflate(await _storage!.value(key)).getBytes(),
             allowMalformed: true)
         : await valueAt(index);
   }
