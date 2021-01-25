@@ -87,7 +87,7 @@ void main() async {
     runCaseInvariantTests();
     runCaseInsensitiveTests();
 
-    test('fromMap() constructor property inits object', () {
+    test('fromMap() constructor properly inits object', () {
       //expect(ikv.indexedKeys, true);
       expect(ikv.valuesInMemory, true);
     });
@@ -99,9 +99,32 @@ void main() async {
         progressCalledTimes++;
         maxProgress = progress;
       });
-      expect(ik.length > 0, true);
+      expect(ik.length, testMap.length);
       expect(progressCalledTimes > 2, true);
       expect(maxProgress, 100);
+    });
+
+    test('IkvPack can be built from map asynchronously and report progress',
+        () async {
+      var progressCalledTimes = 0;
+      var maxProgress = 0;
+      var ik = await IkvPack.buildFromMapAsync(testMap, true, (progress) async {
+        progressCalledTimes++;
+        maxProgress = progress;
+        return 1;
+      });
+      expect(ik!.length, testMap.length);
+      expect(progressCalledTimes > 2, true);
+      expect(maxProgress, 100);
+    });
+
+    test('IkvPack asynchruos build from map can be canceled', () async {
+      var progressCalledTimes = 0;
+      var ik = await IkvPack.buildFromMapAsync(testMap, true, (progress) {
+        progressCalledTimes++;
+        if (progressCalledTimes > 2) return null;
+      });
+      expect(ik, null);
     });
 
     test('IkvPack can be built from map in isolate', () async {

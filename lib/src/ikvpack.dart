@@ -29,9 +29,11 @@ class IkvPack {
       : _valuesInMemory = false,
         _storage = Storage(path);
 
+  IkvPack.__([this.keysCaseInsensitive = true])
+      : _valuesInMemory = true,
+        _storage = null;
+
   static Future<IkvPack> load(String path, [keysCaseInsensitive = true]) async {
-    // var sw = Stopwatch();
-    // sw.start();
     var ikv = IkvPack._(path, keysCaseInsensitive);
     try {
       ikv._originalKeys = await ikv._storage!.readSortedKeys();
@@ -39,10 +41,6 @@ class IkvPack {
       ikv._storage?.dispose();
       rethrow;
     }
-    // sw.stop();
-    // print('File load ${sw.elapsedMilliseconds}');
-    // sw.reset();
-    // sw.start();
 
     // check if there's need for shadow keys
     if (!(ikv._storage!.noUpperCaseFlag && ikv._storage!.noOutOfOrderFlag)) {
@@ -60,17 +58,9 @@ class IkvPack {
       ikv._shadowKeysUsed = false;
     }
 
-    // sw.stop();
-    // print('Shadow keys ${sw.elapsedMilliseconds}');
-    // sw.reset();
-    // sw.start();
-
     ikv._keysReadOnly = UnmodifiableListView<String>(ikv._originalKeys);
 
     ikv._buildBaskets();
-
-    // sw.stop();
-    // print('Baskets ${sw.elapsedMilliseconds}');
 
     return ikv;
   }
@@ -117,13 +107,6 @@ class IkvPack {
     return completer.future;
   }
 
-  static Future<IkvPack> buildFromMapInIsolate(Map<String, String> map,
-      [keysCaseInsensitive = true,
-      Function(int progressPercent)? updateProgress]) {
-    var ic = CallbackIsolate(IkvCallbackJob(map, keysCaseInsensitive));
-    return ic.run((arg) => updateProgress?.call(arg));
-  }
-
   /// Deletes file on disk or related IndexedDB in Web
   static void delete(String path) {
     deleteFromPath(path);
@@ -166,9 +149,13 @@ class IkvPack {
   bool get valuesInMemory => _valuesInMemory;
 
   /// String values are compressed via Zlib, stored that way and are decompresed when values fetched
+  /// map - the source for Keys/Values
+  /// keysCaseInsensitive - lower cases shadow keys will be built to conduct fast case-insensitive searches while preserving original keys
+  /// updateProgress - a callback to use to push updates of building the object, only usefull when run in isolate
   IkvPack.fromMap(Map<String, String> map,
       [this.keysCaseInsensitive = true,
-      Function(int progressPercent)? updateProgress])
+      Function(int progressPercent)? updateProgress,
+      bool awaitProgreess = false])
       : _valuesInMemory = true,
         _storage = null {
     var entries = _getSortedEntriesFromMap(map);
@@ -184,7 +171,6 @@ class IkvPack {
 
     _values = List.generate(entries.length, (i) {
       var utf = utf8.encode(entries[i].value);
-      //var zip = codec.encoder.convert(utf) as Uint8List; // causes huge memory leak
       var zip = Uint8List.fromList(encoder.encode(utf));
       if (updateProgress != null) {
         progress = (15 + 80 * i / entries.length).round();
@@ -202,6 +188,70 @@ class IkvPack {
     _keysReadOnly = UnmodifiableListView<String>(_originalKeys);
     _buildBaskets();
     if (updateProgress != null) updateProgress(100);
+  }
+
+  static Future<IkvPack> buildFromMapInIsolate(Map<String, String> map,
+      [keysCaseInsensitive = true,
+      Function(int progressPercent)? updateProgress]) {
+    var ic = CallbackIsolate(IkvCallbackJob(map, keysCaseInsensitive));
+    return ic.run((arg) => updateProgress?.call(arg));
+  }
+
+  // static Future<bool> _reportProgressCancel(int progress,
+  //     Future? Function(int progressPercent)? updateProgress) async {
+  //   if (updateProgress != null) {
+  //     var x = updateProgress(5);
+  //     if (x == null) return true;
+  //     await x;
+  //   }
+  //   return false;
+  // }
+
+  /// Buulding the object can be time consuming and can block the main thread, splitting the
+  /// build into multiple microtasks via updateProgress claback. If the progress returns null build process is canceled
+  static Future<IkvPack?> buildFromMapAsync(Map<String, String> map,
+      [keysCaseInsensitive = true,
+      Future? Function(int progressPercent)? updateProgress]) async {
+    var ikv = IkvPack.__(keysCaseInsensitive);
+
+    var entries = ikv._getSortedEntriesFromMap(map);
+
+    if (updateProgress != null && await updateProgress(5) == null) return null;
+
+    ikv._buildOriginalKeys(entries);
+    if (updateProgress != null && await updateProgress(10) == null) return null;
+
+    ikv._buildShadowKeys(entries);
+    if (updateProgress != null && await updateProgress(15) == null) return null;
+
+    var progress = 15;
+    var prevProgress = 15;
+
+    ikv._values = <Uint8List>[];
+
+    for (var i = 0; i < entries.length; i++) {
+      var utf = utf8.encode(entries[i].value);
+      var zip = Uint8List.fromList(ikv.encoder.encode(utf));
+      if (updateProgress != null) {
+        progress = (15 + 80 * i / entries.length).round();
+        if (progress != prevProgress) {
+          prevProgress = progress;
+          if (await updateProgress(progress) == null) return null;
+        }
+      }
+
+      ikv._values.add(zip);
+    }
+
+    if (updateProgress != null && await updateProgress(95) == null) return null;
+
+    ikv._keysReadOnly = UnmodifiableListView<String>(ikv._originalKeys);
+    ikv._buildBaskets();
+    if (updateProgress != null && await updateProgress(100) == null) {
+      return null;
+    }
+
+    return ikv;
   }
 
   IkvPack.fromBytes(ByteData bytes,
@@ -243,7 +293,7 @@ class IkvPack {
         List.generate(entries.length, (i) => entries[i].key, growable: false);
   }
 
-  List<_Triple> _getSortedEntriesFromMap(Map<String, String> map) {
+  List<_Triple<String>> _getSortedEntriesFromMap(Map<String, String> map) {
     assert(map.isNotEmpty, 'Key/Value map can\'t be empty');
 
     Iterable<_Triple<String>>? entries;
@@ -256,7 +306,7 @@ class IkvPack {
           map.entries.map((e) => _Triple<String>.noLowerCase(e.key, e.value));
     }
 
-    var list = _fixKeysAndValues(entries);
+    var list = _fixKeysAndValues<String>(entries);
 
     assert(list.isNotEmpty, 'Refined Key/Value collection can\'t be empty');
 
@@ -269,7 +319,7 @@ class IkvPack {
     return list;
   }
 
-  List<_Triple> _getSortedEntriesFromLists(
+  List<_Triple<Uint8List>> _getSortedEntriesFromLists(
       List<String> keys, List<Uint8List> values) {
     assert(keys.isNotEmpty, 'Keys can\'t be empty');
     assert(values.isNotEmpty, 'Values can\'t be empty');
@@ -289,7 +339,7 @@ class IkvPack {
               _Triple<Uint8List>.noLowerCase(keys[index], values[index]));
     }
 
-    var list = _fixKeysAndValues(entries);
+    var list = _fixKeysAndValues<Uint8List>(entries);
 
     assert(list.isNotEmpty, 'Refined Key/Value collection can\'t be empty');
 
@@ -302,8 +352,8 @@ class IkvPack {
     return list;
   }
 
-  List<_Triple> _fixKeysAndValues(Iterable<_Triple> entries) {
-    var fixed = <_Triple>[];
+  List<_Triple<T>> _fixKeysAndValues<T>(Iterable<_Triple> entries) {
+    var fixed = <_Triple<T>>[];
 
     for (var e in entries) {
       if (e.value.isNotEmpty) {
@@ -313,7 +363,7 @@ class IkvPack {
 
         if (s.isNotEmpty) {
           if (s.length > 255) s = s.substring(0, 255);
-          fixed.add(_Triple.lowerCase(s, e.value));
+          fixed.add(_Triple<T>.lowerCase(s, e.value));
         }
       }
     }
@@ -743,6 +793,7 @@ abstract class StorageBase {
   void reopenFile();
 }
 
+//TODO: remove code duplication, share code with storage_vm
 Tupple<List<String>, List<Uint8List>> parseBinary(ByteData data) {
   // ignore: unused_local_variable
   var flags = data.getInt32(0); //_readUint32(f, Endian.big);
