@@ -122,19 +122,6 @@ class IkvPack {
   final List<_KeyBasket> _keyBaskets = [];
   List<Uint8List> _values = [];
 
-  // Archive packaghe appeared to be faster in compressing and decompressing
-  // UPD: Though caught strange out-of=memory exception on version 3.0-nullsafe
-  // Decided to used standrad Dart's codec
-  // UPD2: Turned out dart:io is requried for standard compressor, revertimg to archive
-  // final ZLibDecoder decoder = ZLibDecoder();
-  // final ZLibEncoder encoder = ZLibEncoder();
-
-  // final ZLibCodec codec = ZLibCodec(
-  //     level: 7,
-  //     memLevel: ZLibOption.maxMemLevel,
-  //     raw: true,
-  //     strategy: ZLibOption.strategyDefault);
-
   UnmodifiableListView<String> _keysReadOnly = UnmodifiableListView<String>([]);
   UnmodifiableListView<String> get keys => _keysReadOnly;
 
@@ -170,7 +157,6 @@ class IkvPack {
 
     _values = List.generate(entries.length, (i) {
       var utf = utf8.encode(entries[i].value);
-      //var zip = Uint8List.fromList(encoder.encode(utf));
       var zip = Uint8List.fromList(Deflate(utf).getBytes());
       if (updateProgress != null) {
         progress = (15 + 80 * i / entries.length).round();
@@ -197,18 +183,21 @@ class IkvPack {
     return ic.run((arg) => updateProgress?.call(arg));
   }
 
-  // static Future<bool> _reportProgressCancel(int progress,
-  //     Future? Function(int progressPercent)? updateProgress) async {
-  //   if (updateProgress != null) {
-  //     var x = updateProgress(5);
-  //     if (x == null) return true;
-  //     await x;
-  //   }
-  //   return false;
-  // }
-
-  /// Buulding the object can be time consuming and can block the main thread, splitting the
-  /// build into multiple microtasks via updateProgress claback. If the progress returns null build process is canceled
+  /// Building the object can be time consuming and can block the main UI thread, splitting the
+  /// build into multiple microtasks via awaiting updateProgress claback (and giving control up the stream).
+  /// If the progress callback returns null build process is canceled, the method returns null
+  /// Future<bool> _awaitableUpdateProgeress(int progress) {
+  ///  if (_canceled) return null;
+  ///  return Future(() {
+  ///    propgressProperty = progress;
+  ///    notifyListener()
+  ///    return false;
+  ///  });
+  /// }
+  /// ...
+  /// var ikv = await IkvPack.buildFromMapAsync(map, true, (progress) async {
+  ///      return _awaitableUpdateProgeress(progress);
+  ///    });
   static Future<IkvPack?> buildFromMapAsync(Map<String, String> map,
       [keysCaseInsensitive = true,
       Future? Function(int progressPercent)? updateProgress]) async {
@@ -231,7 +220,6 @@ class IkvPack {
 
     for (var i = 0; i < entries.length; i++) {
       var utf = utf8.encode(entries[i].value);
-      //var zip = Uint8List.fromList(ikv.encoder.encode(utf));
       var zip = Uint8List.fromList(Deflate(utf).getBytes());
       if (updateProgress != null) {
         progress = (15 + 80 * i / entries.length).round();
@@ -255,6 +243,7 @@ class IkvPack {
     return ikv;
   }
 
+  /// Creates object from binary DIKT image (e.g. when DIKT file is loaded to memory)
   IkvPack.fromBytes(ByteData bytes,
       [this.keysCaseInsensitive = true,
       Function(int progressPercent)? updateProgress])
@@ -276,6 +265,36 @@ class IkvPack {
     _keysReadOnly = UnmodifiableListView<String>(_originalKeys);
     _buildBaskets();
     if (updateProgress != null) updateProgress(100);
+  }
+
+  /// Creates object from binary DIKT image (e.g. when DIKT file is loaded to memory)
+  /// Can report progress and be canceled, see buildFromMapAsync() for details
+  static Future<IkvPack?> buildFromBytesAsync(ByteData bytes,
+      [keysCaseInsensitive = true,
+      Future? Function(int progressPercent)? updateProgress]) async {
+    if (updateProgress != null && await updateProgress(0) == null) return null;
+    var t = parseBinary(bytes);
+    if (updateProgress != null && await updateProgress(20) == null) return null;
+
+    var ikv = IkvPack.__(keysCaseInsensitive);
+    var entries = ikv._getSortedEntriesFromLists(t.item1, t.item2);
+    if (updateProgress != null && await updateProgress(40) == null) return null;
+
+    ikv._buildOriginalKeys(entries);
+    if (updateProgress != null && await updateProgress(60) == null) return null;
+
+    ikv._buildShadowKeys(entries);
+    if (updateProgress != null && await updateProgress(80) == null) return null;
+
+    ikv._values = t.item2;
+    ikv._keysReadOnly = UnmodifiableListView<String>(ikv._originalKeys);
+
+    ikv._buildBaskets();
+    if (updateProgress != null && await updateProgress(100) == null) {
+      return null;
+    }
+
+    return ikv;
   }
 
   void _buildShadowKeys(List<_Triple> entries) {
@@ -397,8 +416,12 @@ class IkvPack {
   }
 
   /// Serialize object to a given file (on VM) or IndexedDB (in Web)
-  Future<void> saveTo(String path) async {
-    return saveToPath(path, _originalKeys, _values);
+  /// updateProgress callback is only implemented for Web and ignored on VM
+  /// Return 'true' from updateProgress to break the operation
+  /// Unlike buildFromMapAsyn()c there's no need to return Future from the callback (and await it inside the method to free microtask queue and unblock UI, there're other awaits that allow to do this without extra Future)
+  Future<void> saveTo(String path,
+      [Function(int progressPercent)? updateProgress]) async {
+    return saveToPath(path, _originalKeys, _values, updateProgress);
   }
 
   /// Can be slow

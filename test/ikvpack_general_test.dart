@@ -155,5 +155,30 @@ void main() async {
 
     runCaseInvariantTests();
     runCaseInsensitiveTests();
+
+    test('IkvPack can be built from bytes asynchronously and report progress',
+        () async {
+      var progressCalledTimes = 0;
+      var maxProgress = 0;
+      var ik = await IkvPack.buildFromBytesAsync(
+          testBytes.buffer.asByteData(), true, (progress) async {
+        progressCalledTimes++;
+        maxProgress = progress;
+        return 1;
+      });
+      expect(ik!.length, testMap.length);
+      expect(progressCalledTimes > 2, true);
+      expect(maxProgress, 100);
+    });
+
+    test('IkvPack asynchruos build from bytes can be canceled', () async {
+      var progressCalledTimes = 0;
+      var ik = await IkvPack.buildFromBytesAsync(
+          testBytes.buffer.asByteData(), true, (progress) {
+        progressCalledTimes++;
+        if (progressCalledTimes > 2) return null;
+      });
+      expect(ik, null);
+    });
   });
 }

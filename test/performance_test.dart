@@ -44,7 +44,11 @@ void main() async {
       ikv100RuInsense.prnt('I100 RU, CASE-INSE', true);
       currentEnInsense.prnt('CURR EN, CASE-INSE', true);
       ikv100EnInsense.prnt('I100 EN, CASE-INSE', true);
+
+      expect(currentRuInsense.avgMicro < ikv100RuInsense.avgMicro, true);
+      expect(currentEnInsense.avgMicro < ikv100EnInsense.avgMicro, true);
     }, skip: skippLongTests);
+
     test('Case-Sensitive, Current version not slower than 1.0.0', () {
       var currentRuSense =
           _benchmark(() => loadCurrent(ruFile101, false), 6, 1);
@@ -57,6 +61,9 @@ void main() async {
       ikv100RuSense.prnt('I100 RU, CASE-SENS', true);
       currentEnSense.prnt('CURR EN, CASE-SENS', true);
       ikv100EnSense.prnt('I100 EN, CASE-SENS', true);
+
+      expect(currentRuSense.avgMicro < ikv100RuSense.avgMicro, true);
+      expect(currentEnSense.avgMicro < ikv100EnSense.avgMicro, true);
     }, skip: skippLongTests);
   });
 
@@ -302,6 +309,24 @@ void main() async {
       utf16ListBench.prnt('UTF16L');
     });
   }, skip: true);
+
+  test('Ikv.fromMap sync vs async', () async {
+    void fromMap() {
+      var _ = IkvPack.fromMap(testMap);
+    }
+
+    void fromMapAsync() async {
+      var _ = await IkvPack.buildFromMapAsync(testMap);
+    }
+
+    var sn = _benchmark(fromMap);
+    var asn = _benchmark(fromMapAsync);
+
+    sn.prnt('Sync', true);
+    asn.prnt('Async', true);
+
+    expect((sn.avgMicro - asn.avgMicro).abs() / sn.avgMicro < 0.125, true);
+  }, skip: skippLongTests);
 }
 
 class _Benchmark {

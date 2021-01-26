@@ -119,13 +119,39 @@ Future<ObjectStore> _getValueStoreInDb(Database db) async {
   return db.transaction(_storeValues, 'readonly').objectStore(_storeValues);
 }
 
-Future<void> saveToPath(
-    String path, List<String> keys, List<Uint8List> values) async {
+Future<void> saveToPath(String path, List<String> keys, List<Uint8List> values,
+    [Function(int progressPercent)? updateProgress]) async {
   var db = await _getDb(path, true);
+  var canceled = false;
 
   print('Inserting keys to IndexedDB ${path}');
-  await insert(db, keys, values);
-  db.close();
+  try {
+    if (updateProgress == null || keys.length < 100) {
+      await insert(db, keys, values);
+    } else {
+      var split = 20;
+      var chunkSize = (keys.length / split).round();
+      for (var i = 1; i < split; i++) {
+        await insert(db, keys, values, chunkSize * (i - 1), chunkSize * i - 1);
+        if (updateProgress(i * (100 / split).round()) == true) {
+          print('Cancel');
+          // if true - cancel
+          canceled = true;
+          break;
+        }
+      }
+      if (!canceled) {
+        await insert(
+            db, keys, values, chunkSize * (split - 1), keys.length - 1);
+        updateProgress(100);
+      }
+    }
+  } finally {
+    db.close();
+    if (canceled) {
+      deleteFromPath(path);
+    }
+  }
   print('Keys inserted to IndexedDB');
 }
 

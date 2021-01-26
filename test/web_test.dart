@@ -70,5 +70,41 @@ void main() async {
 
       expect(exists, false);
     });
+
+    test('IkvPack can return progress while saving', () async {
+      var progressCalledTimes = 0;
+      var maxProgress = 0;
+      var ik = IkvPack.fromMap(testMap);
+
+      await ik.saveTo('tmp/test2.dat', (progress) {
+        progressCalledTimes++;
+        maxProgress = progress;
+      });
+      expect(progressCalledTimes > 2, true);
+      expect(maxProgress, 100);
+    });
+
+    test('IkvPack can cancel saving', () async {
+      var progressCalledTimes = 0;
+      var maxProgress = 0;
+      var ik = IkvPack.fromMap(testMap);
+
+      await ik.saveTo('tmp/test2.dat', (progress) {
+        progressCalledTimes++;
+        maxProgress = progress;
+        if (progress == 15) return true;
+      });
+      expect(progressCalledTimes > 2, true);
+      expect(maxProgress, 15);
+
+      var exists = false;
+
+      var db = await window.indexedDB!.open('tmp/test2.dat');
+      if (db.objectStoreNames!.contains('keys')) {
+        exists = true;
+      }
+
+      expect(exists, false);
+    });
   });
 }

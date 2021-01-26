@@ -7,7 +7,6 @@ import 'package:ikvpack/src/isolate_helpers.dart';
 import 'package:test/test.dart';
 
 import 'shared.dart';
-import 'testMap.dart';
 
 void main() async {
   // Used to generate test data

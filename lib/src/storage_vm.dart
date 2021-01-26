@@ -257,8 +257,8 @@ void _writeUint16(RandomAccessFile raf, int value) {
   raf.writeFromSync(bd.buffer.asUint8List());
 }
 
-Future<void> saveToPath(
-    String path, List<String> keys, List<Uint8List> values) async {
+Future<void> saveToPath(String path, List<String> keys, List<Uint8List> values,
+    [Function(int progressPercent)? updateProgress]) async {
   var raf = File(path).openSync(mode: FileMode.write);
   try {
     raf.setPositionSync(4); //skip reserved
