@@ -152,6 +152,17 @@ void runCaseInsensitiveTests() {
     expect(keys.length, 10);
   });
 
+  test(
+      'Consolidated keysStartingWith() doesn\'t fail for exact single key (bug fix)',
+      () {
+    var m = <String, String>{'': '', 'wew': 'dsdsd', 'sss': '', 'sdss': 'd'};
+    var ik = IkvPack.fromMap(m);
+    var ikvs = [_ikv, ik];
+
+    var keys = IkvPack.consolidatedKeysStartingWith(ikvs, 'north by east');
+    expect(keys.length, 1);
+  });
+
   test('Consolidated keysStartingWith returns original keys', () {
     var m = <String, String>{'': '', 'Wew': 'dsdsd', 'sss': '', 'sdss': 'd'};
     var ik = IkvPack.fromMap(m);

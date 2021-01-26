@@ -722,35 +722,16 @@ class IkvPack {
       if (tuples.length > 3 * maxResults) max2 = (maxResults / 2).floor();
     }
 
-    // print(
-    //     '|Lookup matches ${tuples.length}, ${sw.elapsedMicroseconds} microseconds');
-    // sw.reset();
-
-    if (tuples.length > 1) {
+    if (tuples.isNotEmpty) {
       tuples = _distinct(tuples);
-      // print(
-      //     '|Distinct ${tuples.length}, ${sw.elapsedMicroseconds} microseconds');
-      // sw.reset();
 
       if (tuples.length > maxResults) {
         tuples = tuples.sublist(0, min(maxResults, tuples.length));
       }
 
-      // print(
-      //     '|Sublist ${matches.length}, ${sw.elapsedMicroseconds} microseconds');
-      // sw.reset();
-
       //recover original keys
       matches = tuples.map((e) => e.item2).toList();
-
-      // print('|Originals recovered, ${sw.elapsedMicroseconds} microseconds');
-      // sw.reset();
     }
-
-    // 82 dics, я being moved by Я
-    // matches = distinct(matches);
-    // print(
-    //     '|Distinct2 ${matches.length}, ${sw.elapsedMicroseconds} microseconds');
 
     return matches;
   }
