@@ -49,7 +49,7 @@ class IkvPack {
           var k = ikv._storage!.noUpperCaseFlag
               ? ikv._originalKeys[i]
               : ikv._originalKeys[i].toLowerCase();
-          if (!ikv._storage!.noOutOfOrderFlag) k = _fixOutOfOrder(k);
+          if (!ikv._storage!.noOutOfOrderFlag) k = fixOutOfOrder(k);
           return k;
         }, growable: false);
       }
@@ -554,7 +554,7 @@ class IkvPack {
       key = key.toLowerCase();
     }
     if (_shadowKeysUsed) {
-      key = _fixOutOfOrder(key);
+      key = fixOutOfOrder(key);
       list = _shadowKeys;
     }
 
@@ -597,79 +597,99 @@ class IkvPack {
   @pragma('dart2js:tryInline')
   bool containsKey(String key) => indexOf(key) > -1;
 
-  // int _narrowDownFirst(String key, _KeyBasket b, List<String> list) {
-  //   var l = b.startIndex;
-  //   var r = b.endIndex;
+  int _narrowDownFirst(String key, _KeyBasket b, List<String> list) {
+    var l = b.startIndex;
+    var r = b.endIndex;
 
-  //   while (l <= r) {
-  //     var m = (l + (r - l) / 2).round();
+    while (l <= r) {
+      var m = (l + (r - l) / 2).round();
 
-  //     var res = key.compareTo(list[m]);
+      var res = key.compareTo(list[m]);
 
-  //     // Check if x is present at mid
-  //     if (res == 0) break;
+      // Check if x is present at mid
+      if (res == 0) break;
 
-  //     if (res > 0) {
-  //       // If x greater, ignore left half
-  //       l = m + 1;
-  //     } else {
-  //       // If x is smaller, ignore right half
-  //       r = m - 1;
-  //     }
-  //   }
+      if (res > 0) {
+        // If x greater, ignore left half
+        l = m + 1;
+      } else {
+        // If x is smaller, ignore right half
+        r = m - 1;
+      }
+    }
 
-  //   return l < r ? l : r;
-  // }
+    return l < r ? l : r;
+  }
 
 // Used by consolidated lookup to recover original keys
-  int _kswi = 0;
+  //int _kswi = 0;
+
+  final List<String> _kswOriginalKeys = [];
 
   List<String> keysStartingWith(String key,
       [int maxResults = 100, bool returnShadowKeys = false]) {
-    var keys = <String>[];
+    //var keys = <String>[];
     var list = _originalKeys;
     key = key.trim();
 
-    if (key.isEmpty) return keys;
+    if (key.isEmpty) return [];
 
     if (keysCaseInsensitive) {
       key = key.toLowerCase();
     }
 
     if (_shadowKeysUsed) {
-      key = _fixOutOfOrder(key);
+      key = fixOutOfOrder(key);
       list = _shadowKeys;
     }
 
     var fl = key[0].codeUnits[0];
-    _kswi = -1;
+
+    //var matches = <String, int>{};
+
+    var result = <String>[];
+    _kswOriginalKeys.clear();
 
     for (var b in _keyBaskets) {
       if (b.firstLetter == fl) {
         var startIndex = b.startIndex;
         var endIndex = b.endIndex;
 
-        if (key.length == 1) {
-          _kswi = startIndex;
-          return (_shadowKeysUsed && returnShadowKeys
-                  ? _shadowKeys
-                  : _originalKeys)
-              .sublist(startIndex, min(endIndex + 1, startIndex + maxResults));
-        } else {
-          //startIndex = _narrowDownFirst(key, b, list);
+        // if (key.length == 1) {
+        //   _kswi = startIndex;
+        //   return (_shadowKeysUsed && returnShadowKeys
+        //           ? _shadowKeys
+        //           : _originalKeys)
+        //       .sublist(startIndex, min(endIndex + 1, startIndex + maxResults));
+        // } else {
+        if (key.length > 1) {
+          var f = _narrowDownFirst(key, b, list);
+          startIndex = f > -1 ? f : startIndex;
+        }
 
-          var i = startIndex;
-          for (i; i <= endIndex; i++) {
-            if (list[i].startsWith(key)) {
-              if (_kswi == -1) _kswi = i;
-              keys.add(_shadowKeysUsed && returnShadowKeys
-                  ? _shadowKeys[i]
-                  : _originalKeys[i]);
-              if (keys.length >= maxResults) {
-                _kswi = i - keys.length + 1;
-                return keys;
-              }
+        var i = startIndex;
+        var prevK = '';
+        for (i; i <= endIndex; i++) {
+          if (list[i].startsWith(key)) {
+            var k = _shadowKeysUsed && returnShadowKeys
+                ? _shadowKeys[i]
+                : _originalKeys[i];
+            if (k != prevK) {
+              result.add(k);
+              if (returnShadowKeys) _kswOriginalKeys.add(_originalKeys[i]);
+              prevK = k;
             }
+            if (result.length >= maxResults) {
+              //_kswi = i - result.length + 1;
+              return result;
+            }
+            // if (!matches.containsKey(k)) {
+            //   matches[k] = 0;
+            // }
+            // if (matches.length >= maxResults) {
+            //   _kswi = i - matches.length + 1;
+            //   return matches.keys.toList();
+            // }
           }
         }
 
@@ -677,7 +697,8 @@ class IkvPack {
       }
     }
 
-    return keys;
+    //return matches.keys.toList();
+    return result;
   }
 
   void dispose() {
@@ -716,7 +737,7 @@ class IkvPack {
       var i = 0;
       tuples.addAll(
           p.keysStartingWith(value, max2, p.keysCaseInsensitive).map((e) {
-        return Tupple(e, p._originalKeys[p._kswi + i++]);
+        return Tupple(e, p.keysCaseInsensitive ? p._kswOriginalKeys[i++] : e);
       }));
       if (tuples.length > maxResults) max2 = (maxResults / 2).floor();
       if (tuples.length > 3 * maxResults) max2 = (maxResults / 2).floor();
@@ -876,7 +897,7 @@ class _Triple<T> {
   final T value;
 
   _Triple.lowerCase(this.key, this.value)
-      : keyLowerCase = _fixOutOfOrder(key.toLowerCase());
+      : keyLowerCase = fixOutOfOrder(key.toLowerCase());
 
   _Triple.noLowerCase(this.key, this.value) : keyLowerCase = '';
 }
@@ -888,28 +909,28 @@ final _cc2 = 'и'.codeUnits[0];
 final _c3 = 'ў'.codeUnits[0];
 final _cc3 = 'у'.codeUnits[0];
 
-// Out of order Cyrylic chars
-// я - 1103
-//
-// е - 1077 (й 1078)
-// ё - 1105  <---
-//
-// з - 1079 (и 1080)
-// і - 1110  <---
-//
-// у - 1091
-// ў - 1118  <---
-// ѝ/1117, ќ/1116, ћ/1115, њ/1114, љ/1113, ј/1112, ї/1111, і/1110, ѕ/1109,
-// є/1108, ѓ/1107, ђ/1106, ё/1105, ѐ/1104
-// http://www.ltg.ed.ac.uk/~richard/utf-8.cgi?input=1103&mode=decimal
+/// Out of order Cyrylic chars
+/// я - 1103
+///
+/// е - 1077 (й 1078)
+/// ё - 1105  <---
+///
+/// з - 1079 (и 1080)
+/// і - 1110  <---
+///
+/// у - 1091
+/// ў - 1118  <---
+/// ѝ/1117, ќ/1116, ћ/1115, њ/1114, љ/1113, ј/1112, ї/1111, і/1110, ѕ/1109,
+/// є/1108, ѓ/1107, ђ/1106, ё/1105, ѐ/1104
+/// http://www.ltg.ed.ac.uk/~richard/utf-8.cgi?input=1103&mode=decimal
 
-// Belarusian alphabet
-// АаБбВвГгДдЕеЁёЖжЗзІіЙйКкЛлМмНнОоПпРрСсТтУуЎўФфХхЦцЧчШшЫыЬьЭэЮюЯя
-// АБВГДЕЁЖЗІЙКЛМНОПРСТУЎФХЦЧШЫЬЭЮЯ
-// абвгдеёжзійклмнопрстуўфхцчшыьэюя
+/// Belarusian alphabet
+/// АаБбВвГгДдЕеЁёЖжЗзІіЙйКкЛлМмНнОоПпРрСсТтУуЎўФфХхЦцЧчШшЫыЬьЭэЮюЯя
+/// АБВГДЕЁЖЗІЙКЛМНОПРСТУЎФХЦЧШЫЬЭЮЯ
+/// абвгдеёжзійклмнопрстуўфхцчшыьэюя
 @pragma('vm:prefer-inline')
 @pragma('dart2js:tryInline')
-String _fixOutOfOrder(String value) {
+String fixOutOfOrder(String value) {
   //value = value.replaceAll('ё', 'е').replaceAll('і', 'и').replaceAll('ў', 'у');
 
   var cus = Uint16List.fromList(value.codeUnits);
