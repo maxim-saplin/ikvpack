@@ -9,7 +9,7 @@ import 'package:archive/archive.dart';
 
 import 'package:ikvpack/ikvpack.dart';
 
-import 'storage_web.dart'
+import 'storage_vm.dart'
     if (dart.library.io) 'storage_vm.dart'
     if (dart.library.html) 'storage_web.dart';
 
@@ -626,6 +626,10 @@ class IkvPack {
 
   final List<String> _kswOriginalKeys = [];
 
+  /// Efficiently search keys that start with given srting. if keysCaseInsensitive == true
+  /// than use lower case shadow keys for comparisons - in this case there can be 2+ different
+  /// original keys while when kower case thay will be the same (e.g. Aa and aA are both aa when lower case, JIC original keys are always unique, shadow keys are not guaranteed)
+  ///
   List<String> keysStartingWith(String key,
       [int maxResults = 100, bool returnShadowKeys = false]) {
     //var keys = <String>[];

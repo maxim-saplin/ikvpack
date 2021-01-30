@@ -41,7 +41,7 @@ class Storage extends StorageBase {
   // in a loop with 2mln iterations to very infrequent operastions, e.g. 0,1ms of value extraction
   // delay won't be noticed when looking up a single value (which is the more relevant case). Also given that all values are dcompresed
   // the delayed extraction of offset/length won't be comparable to the ammount of time needed by zlib
-  ByteData? _valuesOffsets;
+  late ByteData _valuesOffsets;
 
   @override
   void dispose() {
@@ -161,14 +161,18 @@ class Storage extends StorageBase {
   @override
   bool get useIndexToGetValue => true;
 
+  @pragma('vm:prefer-inline')
+  @pragma('dart2js:tryInline')
   @override
   Future<Uint8List> valueAt(int index) async {
     if (_disposed) throw 'Storage object was disposed, cant use it';
-    var offset = _valuesOffsets!.getUint32(index * 8);
-    var length = _valuesOffsets!.getUint32(index * 8 + 4);
+    var o = index * 8;
+    var offset = _valuesOffsets.getUint32(o);
+    var length = _valuesOffsets.getUint32(o + 4);
     var f = _file as RandomAccessFile;
     f.setPositionSync(offset);
-    var value = await f.read(length);
+    //var value = await f.read(length);
+    var value = f.readSync(length);
     return value;
   }
 
