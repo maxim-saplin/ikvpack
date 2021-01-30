@@ -17,6 +17,6 @@ Initially I used HiveDB to store and load key/value pairs which is fast compared
 | Use case                          | IkvPack           | Hive              |
 | --------------------------------- |:-----------------:| -----------------:|
 | Loading IkvPack file/Hive box     | 25.6 ms           | 732.0 ms          |
-| Iterasting through all keys       | 7.3 microseconds  | 40.0 microseconds |
+| Iterating through all keys        | 7.3 microseconds  | 40.0 microseconds |
 | Searcing for keys starting with %x| 0.5 microseconds  | 62.2 microseconds |
 
