@@ -20,22 +20,32 @@ void main() async {
   const skippLongTests = false;
 
   group('Real file tests', () {
-    Future<int> loadCurr(String path, bool keysCaseInsensitive) async {
-      var ikv = await IkvPack.load(path, keysCaseInsensitive);
+    Future<int> loadCurr(String path, bool keysCaseInsensitive,
+        [IsolatePool? pool]) async {
+      var ikv = pool == null
+          ? await IkvPack.load(path, keysCaseInsensitive)
+          : await IkvPack.loadInIsolatePool(pool, path);
       return ikv.length;
     }
 
-    int loadIkv100(String path, bool keysCaseInsensitive) {
-      var ikv = ikv100.IkvPack(path, keysCaseInsensitive);
+    Future<int> loadIkv100(String path, bool keysCaseInsensitive,
+        [ikv100.IsolatePool? pool]) async {
+      var ikv = pool == null
+          ? await ikv100.IkvPack(path, keysCaseInsensitive)
+          : await ikv100.IkvPack.loadInIsolatePool(pool, path);
+
       return ikv.length;
     }
 
-    Future<int> loadIkv200(String path, bool keysCaseInsensitive) async {
-      var ikv = await ikv200.IkvPack.load(path, keysCaseInsensitive);
+    Future<int> loadIkv200(String path, bool keysCaseInsensitive,
+        [ikv200.IsolatePool? pool]) async {
+      var ikv = pool == null
+          ? await ikv200.IkvPack.load(path, keysCaseInsensitive)
+          : await ikv200.IkvPack.loadInIsolatePool(pool, path);
       return ikv.length;
     }
 
-    test('Case-Insensitive, Current version not slower to load', () {
+    test('Case-Insensitive, Current version not slower to load', () async {
       // var ikv = IkvPack(ruFile, false);
       // var stats = ikv.getStats();
       // ikv = IkvPack(enFile, false);
@@ -47,19 +57,25 @@ void main() async {
 
       print('Warming up');
 
-      _benchmark(() => loadCurr(ruFileCurr, true), 2, 1);
-      _benchmark(() => loadIkv200(ruFile200, true), 2, 1);
-      _benchmark(() => loadIkv100(ruFile100, true), 2, 1);
+      await _benchmark(() => loadCurr(ruFileCurr, true), 2, 1);
+      await _benchmark(() => loadIkv200(ruFile200, true), 2, 1);
+      await _benchmark(() => loadIkv100(ruFile100, true), 2, 1);
 
       print('Testing...');
 
-      var currentRuInsense = _benchmark(() => loadCurr(ruFileCurr, true), 6, 1);
-      var ikv200RuInsense = _benchmark(() => loadIkv200(ruFile200, true), 6, 1);
-      var ikv100RuInsense = _benchmark(() => loadIkv100(ruFile100, true), 6, 1);
+      var currentRuInsense =
+          await _benchmark(() => loadCurr(ruFileCurr, true), 6, 1);
+      var ikv200RuInsense =
+          await _benchmark(() => loadIkv200(ruFile200, true), 6, 1);
+      var ikv100RuInsense =
+          await _benchmark(() => loadIkv100(ruFile100, true), 6, 1);
 
-      var currentEnInsense = _benchmark(() => loadCurr(enFileCurr, true), 6, 1);
-      var ikv200EnInsense = _benchmark(() => loadIkv200(enFile200, true), 6, 1);
-      var ikv100EnInsense = _benchmark(() => loadIkv100(enFile100, true), 6, 1);
+      var currentEnInsense =
+          await _benchmark(() => loadCurr(enFileCurr, true), 6, 1);
+      var ikv200EnInsense =
+          await _benchmark(() => loadIkv200(enFile200, true), 6, 1);
+      var ikv100EnInsense =
+          await _benchmark(() => loadIkv100(enFile100, true), 6, 1);
 
       currentRuInsense.prnt('CURR RU, CASE-INSE', true);
       ikv200RuInsense.prnt('I200 RU, CASE-INSE', true);
@@ -96,20 +112,26 @@ void main() async {
           true);
     }, skip: skippLongTests);
 
-    test('Case-Sensitive, Current version not slower to load', () {
+    test('Case-Sensitive, Current version not slower to load', () async {
       print('Warming up');
 
-      _benchmark(() => loadCurr(ruFileCurr, false), 2, 1);
-      _benchmark(() => loadIkv200(ruFile200, false), 2, 1);
-      _benchmark(() => loadIkv100(ruFile100, false), 2, 1);
+      await await _benchmark(() => loadCurr(ruFileCurr, false), 2, 1);
+      await await _benchmark(() => loadIkv200(ruFile200, false), 2, 1);
+      await await _benchmark(() => loadIkv100(ruFile100, false), 2, 1);
 
       print('Testing...');
-      var currentRuSense = _benchmark(() => loadCurr(ruFileCurr, false), 6, 1);
-      var ikv200RuSense = _benchmark(() => loadIkv200(ruFile200, false), 6, 1);
-      var ikv100RuSense = _benchmark(() => loadIkv100(ruFile100, false), 6, 1);
-      var currentEnSense = _benchmark(() => loadCurr(enFileCurr, false), 6, 1);
-      var ikv200EnSense = _benchmark(() => loadIkv200(enFile200, false), 6, 1);
-      var ikv100EnSense = _benchmark(() => loadIkv100(enFile100, false), 6, 1);
+      var currentRuSense =
+          await await _benchmark(() => loadCurr(ruFileCurr, false), 6, 1);
+      var ikv200RuSense =
+          await await _benchmark(() => loadIkv200(ruFile200, false), 6, 1);
+      var ikv100RuSense =
+          await _benchmark(() => loadIkv100(ruFile100, false), 6, 1);
+      var currentEnSense =
+          await _benchmark(() => loadCurr(enFileCurr, false), 6, 1);
+      var ikv200EnSense =
+          await _benchmark(() => loadIkv200(enFile200, false), 6, 1);
+      var ikv100EnSense =
+          await _benchmark(() => loadIkv100(enFile100, false), 6, 1);
 
       currentRuSense.prnt('CURR RU, CASE-SENS', true);
       ikv200RuSense.prnt('I200 RU, CASE-SENS', true);
@@ -144,6 +166,73 @@ void main() async {
               15,
           true);
     }, skip: skippLongTests);
+
+    // this one is very slow
+    test('Case-Insensitive, Current version not slower to load in isolate pool',
+        () async {
+      print('Warming up');
+
+      var poolCurr = IsolatePool(1);
+      await poolCurr.start();
+      var pool200 = ikv200.IsolatePool(1);
+      await pool200.start();
+      var pool100 = ikv100.IsolatePool(1);
+      await pool100.start();
+
+      await _benchmark(() => loadCurr(ruFileCurr, true, poolCurr), 1, 1);
+      await _benchmark(() => loadIkv200(ruFile200, true, pool200), 1, 1);
+      await _benchmark(() => loadIkv100(ruFile100, true, pool100), 1, 1);
+
+      print('Testing...');
+
+      var currentRuInsense =
+          await _benchmark(() => loadCurr(ruFileCurr, true, poolCurr), 3, 1);
+      var ikv200RuInsense =
+          await _benchmark(() => loadIkv200(ruFile200, true, pool200), 3, 1);
+      var ikv100RuInsense =
+          await _benchmark(() => loadIkv100(ruFile100, true, pool100), 3, 1);
+
+      var currentEnInsense =
+          await _benchmark(() => loadCurr(enFileCurr, true, poolCurr), 3, 1);
+      var ikv200EnInsense =
+          await _benchmark(() => loadIkv200(enFile200, true, pool200), 3, 1);
+      var ikv100EnInsense =
+          await _benchmark(() => loadIkv100(enFile100, true, pool100), 3, 1);
+
+      currentRuInsense.prnt('CURR RU, CASE-INSE', true);
+      ikv200RuInsense.prnt('I200 RU, CASE-INSE', true);
+      ikv100RuInsense.prnt('I100 RU, CASE-INSE', true);
+
+      currentEnInsense.prnt('CURR EN, CASE-INSE', true);
+      ikv200EnInsense.prnt('I200 EN, CASE-INSE', true);
+      ikv100EnInsense.prnt('I100 EN, CASE-INSE', true);
+
+      expect(
+          (currentRuInsense.avgMicro - ikv100RuInsense.avgMicro) *
+                  100 /
+                  ikv100RuInsense.avgMicro <
+              10,
+          true);
+      expect(
+          (currentEnInsense.avgMicro - ikv100EnInsense.avgMicro) *
+                  100 /
+                  ikv100EnInsense.avgMicro <
+              10,
+          true);
+
+      expect(
+          (currentRuInsense.avgMicro - ikv200RuInsense.avgMicro) *
+                  100 /
+                  ikv200RuInsense.avgMicro <
+              10,
+          true);
+      expect(
+          (currentEnInsense.avgMicro - ikv200EnInsense.avgMicro) *
+                  100 /
+                  ikv200EnInsense.avgMicro <
+              10,
+          true);
+    }, timeout: Timeout(Duration(seconds: 160)), skip: skippLongTests);
   });
 
   group('Trying out certain patterns for performance', () {
@@ -155,7 +244,7 @@ void main() async {
     // CUS   - AVG:845, MIN:536, MAX:2544
     // CUS2  - AVG:401, MIN:364, MAX:676
 
-    test('_fixOutOfOrder', () {
+    test('_fixOutOfOrder', () async {
       var keys = testMap.keys.toList();
 
       List<String> orig() {
@@ -296,13 +385,13 @@ void main() async {
         return kk;
       }
 
-      var org = _benchmark(orig);
-      var cus = _benchmark(codeUnits);
-      var cus2 = _benchmark(codeUnits2);
-      var int16 = _benchmark(uint16);
-      var int1616 = _benchmark(uint16uint16);
-      var just16 = _benchmark(justUint16);
-      var cont = _benchmark(contains);
+      var org = _benchmarkSync(orig);
+      var cus = _benchmarkSync(codeUnits);
+      var cus2 = _benchmarkSync(codeUnits2);
+      var int16 = _benchmarkSync(uint16);
+      var int1616 = _benchmarkSync(uint16uint16);
+      var just16 = _benchmarkSync(justUint16);
+      var cont = _benchmarkSync(contains);
 
       org.prnt('ORG  ');
       cus.prnt('CUS  ');
@@ -380,9 +469,9 @@ void main() async {
         return k;
       }
 
-      var utf8bench = _benchmark(utf8decode);
-      var utf16bench = _benchmark(utf16decode);
-      var utf16ListBench = _benchmark(utf16ListDecode);
+      var utf8bench = _benchmarkSync(utf8decode);
+      var utf16bench = _benchmarkSync(utf16decode);
+      var utf16ListBench = _benchmarkSync(utf16ListDecode);
       utf8bench.prnt('UTF8  ');
       utf16bench.prnt('UTF16 ');
       utf16ListBench.prnt('UTF16L');
@@ -398,8 +487,8 @@ void main() async {
       var _ = await IkvPack.buildFromMapAsync(testMap);
     }
 
-    var sn = _benchmark(fromMap);
-    var asn = _benchmark(fromMapAsync);
+    var sn = _benchmarkSync(fromMap);
+    var asn = _benchmarkSync(fromMapAsync);
 
     sn.prnt('Sync', true);
     asn.prnt('Async', true);
@@ -424,7 +513,44 @@ class _Benchmark {
   }
 }
 
-_Benchmark _benchmark(Function test, [int n = 20, int warmupN = 3]) {
+Future<_Benchmark> _benchmark(Future Function() test,
+    [int n = 20, int warmupN = 3]) async {
+  var min = -1;
+  var max = -1;
+  // ignore: omit_local_variable_types
+  double avg = 0;
+  var sw = Stopwatch();
+  dynamic result;
+
+  for (var i = 0 - warmupN; i < n; i++) {
+    if (i < 0) {
+      await test();
+    } else {
+      sw.start();
+      result = await test();
+      sw.stop();
+
+      if (min == -1) {
+        min = max = sw.elapsedMicroseconds;
+      } else {
+        if (sw.elapsedMicroseconds > max) max = sw.elapsedMicroseconds;
+        if (sw.elapsedMicroseconds < min) min = sw.elapsedMicroseconds;
+      }
+
+      avg += sw.elapsedMicroseconds;
+
+      sw.reset();
+    }
+  }
+
+  avg /= n;
+
+  var b = _Benchmark(min.toDouble(), max.toDouble(), avg)..result = result;
+
+  return b;
+}
+
+_Benchmark _benchmarkSync(Function test, [int n = 20, int warmupN = 3]) {
   var min = -1;
   var max = -1;
   // ignore: omit_local_variable_types
