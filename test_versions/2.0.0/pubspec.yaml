@@ -1,4 +1,4 @@
-name: ikvpack
+name: ikvpack_200
 description: A starting point for Dart libraries or applications.
 version: 2.0.0
 homepage: https://github.com/maxim-saplin/ikvpack
@@ -9,15 +9,6 @@ environment:
 dependencies:
   archive: ^3.0.0-nullsafety.0
   js: ^0.6.3-nullsafety.3
-
-dev_dependencies:
-  pedantic: ^1.10.0-nullsafety.3
-  test: ^1.16.0-nullsafety.15
-  ikvpack_100:
-    path: 'test_versions/1.0.0'
-  ikvpack_200:
-    path: 'test_versions/2.0.0'
-
 
 # dependency_overrides:
 #   crypto: ^3.0.0-nullsafety.0

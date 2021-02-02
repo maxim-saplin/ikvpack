@@ -7,17 +7,20 @@ import 'package:test/test.dart';
 import 'testMap.dart';
 import 'package:ikvpack/ikvpack.dart';
 import 'package:ikvpack_100/ikvpack.dart' as ikv100;
+import 'package:ikvpack_200/ikvpack.dart' as ikv200;
 
 const ruFile100 = 'test/performance_data/100/RU_EN Multitran vol.2.dikt';
 const enFile100 = 'test/performance_data/100/EN_RU Multitran vol.2.dikt';
-const ruFile101 = 'test/performance_data/RU_EN Multitran vol.2.dikt';
-const enFile101 = 'test/performance_data/EN_RU Multitran vol.2.dikt';
+const ruFile200 = 'test/performance_data/RU_EN Multitran vol.2.dikt';
+const enFile200 = 'test/performance_data/EN_RU Multitran vol.2.dikt';
+const ruFileCurr = 'test/performance_data/RU_EN Multitran vol.2.dikt';
+const enFileCurr = 'test/performance_data/EN_RU Multitran vol.2.dikt';
 
 void main() async {
-  const skippLongTests = true;
+  const skippLongTests = false;
 
   group('Real file tests', () {
-    Future<int> loadCurrent(String path, bool keysCaseInsensitive) async {
+    Future<int> loadCurr(String path, bool keysCaseInsensitive) async {
       var ikv = await IkvPack.load(path, keysCaseInsensitive);
       return ikv.length;
     }
@@ -27,43 +30,119 @@ void main() async {
       return ikv.length;
     }
 
-    test('Case-Insensitive, Current version not slower than 1.0.0', () {
+    Future<int> loadIkv200(String path, bool keysCaseInsensitive) async {
+      var ikv = await ikv200.IkvPack.load(path, keysCaseInsensitive);
+      return ikv.length;
+    }
+
+    test('Case-Insensitive, Current version not slower to load', () {
       // var ikv = IkvPack(ruFile, false);
       // var stats = ikv.getStats();
       // ikv = IkvPack(enFile, false);
       // stats = ikv.getStats();
 
-      var currentRuInsense =
-          _benchmark(() => loadCurrent(ruFile101, true), 6, 1);
+      // 02.02.2021 curr and Ikv200 are exactly the samem though first test is always faster, swapping lines confirms.
+      // I susspect there's more grabage collection happenig in latter tests which creates the slowdown
+      // that's why there's separate warm app pass with no resulats gathered
+
+      print('Warming up');
+
+      _benchmark(() => loadCurr(ruFileCurr, true), 2, 1);
+      _benchmark(() => loadIkv200(ruFile200, true), 2, 1);
+      _benchmark(() => loadIkv100(ruFile100, true), 2, 1);
+
+      print('Testing...');
+
+      var currentRuInsense = _benchmark(() => loadCurr(ruFileCurr, true), 6, 1);
+      var ikv200RuInsense = _benchmark(() => loadIkv200(ruFile200, true), 6, 1);
       var ikv100RuInsense = _benchmark(() => loadIkv100(ruFile100, true), 6, 1);
-      var currentEnInsense =
-          _benchmark(() => loadCurrent(enFile101, true), 6, 1);
+
+      var currentEnInsense = _benchmark(() => loadCurr(enFileCurr, true), 6, 1);
+      var ikv200EnInsense = _benchmark(() => loadIkv200(enFile200, true), 6, 1);
       var ikv100EnInsense = _benchmark(() => loadIkv100(enFile100, true), 6, 1);
 
       currentRuInsense.prnt('CURR RU, CASE-INSE', true);
+      ikv200RuInsense.prnt('I200 RU, CASE-INSE', true);
       ikv100RuInsense.prnt('I100 RU, CASE-INSE', true);
+
       currentEnInsense.prnt('CURR EN, CASE-INSE', true);
+      ikv200EnInsense.prnt('I200 EN, CASE-INSE', true);
       ikv100EnInsense.prnt('I100 EN, CASE-INSE', true);
 
-      expect(currentRuInsense.avgMicro < ikv100RuInsense.avgMicro, true);
-      expect(currentEnInsense.avgMicro < ikv100EnInsense.avgMicro, true);
+      expect(
+          (currentRuInsense.avgMicro - ikv100RuInsense.avgMicro) *
+                  100 /
+                  ikv100RuInsense.avgMicro <
+              10,
+          true);
+      expect(
+          (currentEnInsense.avgMicro - ikv100EnInsense.avgMicro) *
+                  100 /
+                  ikv100EnInsense.avgMicro <
+              10,
+          true);
+
+      expect(
+          (currentRuInsense.avgMicro - ikv200RuInsense.avgMicro) *
+                  100 /
+                  ikv200RuInsense.avgMicro <
+              10,
+          true);
+      expect(
+          (currentEnInsense.avgMicro - ikv200EnInsense.avgMicro) *
+                  100 /
+                  ikv200EnInsense.avgMicro <
+              10,
+          true);
     }, skip: skippLongTests);
 
-    test('Case-Sensitive, Current version not slower than 1.0.0', () {
-      var currentRuSense =
-          _benchmark(() => loadCurrent(ruFile101, false), 6, 1);
+    test('Case-Sensitive, Current version not slower to load', () {
+      print('Warming up');
+
+      _benchmark(() => loadCurr(ruFileCurr, false), 2, 1);
+      _benchmark(() => loadIkv200(ruFile200, false), 2, 1);
+      _benchmark(() => loadIkv100(ruFile100, false), 2, 1);
+
+      print('Testing...');
+      var currentRuSense = _benchmark(() => loadCurr(ruFileCurr, false), 6, 1);
+      var ikv200RuSense = _benchmark(() => loadIkv200(ruFile200, false), 6, 1);
       var ikv100RuSense = _benchmark(() => loadIkv100(ruFile100, false), 6, 1);
-      var currentEnSense =
-          _benchmark(() => loadCurrent(enFile101, false), 6, 1);
+      var currentEnSense = _benchmark(() => loadCurr(enFileCurr, false), 6, 1);
+      var ikv200EnSense = _benchmark(() => loadIkv200(enFile200, false), 6, 1);
       var ikv100EnSense = _benchmark(() => loadIkv100(enFile100, false), 6, 1);
 
       currentRuSense.prnt('CURR RU, CASE-SENS', true);
+      ikv200RuSense.prnt('I200 RU, CASE-SENS', true);
       ikv100RuSense.prnt('I100 RU, CASE-SENS', true);
       currentEnSense.prnt('CURR EN, CASE-SENS', true);
+      ikv200EnSense.prnt('I200 EN, CASE-SENS', true);
       ikv100EnSense.prnt('I100 EN, CASE-SENS', true);
 
-      expect(currentRuSense.avgMicro < ikv100RuSense.avgMicro, true);
-      expect(currentEnSense.avgMicro < ikv100EnSense.avgMicro, true);
+      expect(
+          (currentRuSense.avgMicro - ikv100RuSense.avgMicro) *
+                  100 /
+                  ikv100RuSense.avgMicro <
+              15,
+          true);
+      expect(
+          (currentEnSense.avgMicro - ikv100EnSense.avgMicro) *
+                  100 /
+                  ikv100EnSense.avgMicro <
+              35,
+          true); // Tradeoff in newer versions, slower EN (which is still very fast) while much faster RU (which was 5-6 tims slower than EN)
+
+      expect(
+          (currentRuSense.avgMicro - ikv200RuSense.avgMicro) *
+                  100 /
+                  ikv200RuSense.avgMicro <
+              15,
+          true);
+      expect(
+          (currentEnSense.avgMicro - ikv200EnSense.avgMicro) *
+                  100 /
+                  ikv200EnSense.avgMicro <
+              15,
+          true);
     }, skip: skippLongTests);
   });
 
@@ -238,7 +317,7 @@ void main() async {
       //var keys = testMap.keys;
 
       // var ikv = IkvPack(ruFile, false);
-      var ikv = await IkvPack.load(enFile101, false);
+      var ikv = await IkvPack.load(enFile200, false);
       var keys = ikv.keys;
 
 // RU
