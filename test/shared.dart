@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:archive/archive_io.dart';
 import 'package:ikvpack/ikvpack.dart';
-import 'package:ikvpack/src/ikvpack.dart';
+import 'package:ikvpack/src/ikvpack_core.dart';
 import 'package:test/test.dart';
 
 import 'testBytes.dart';

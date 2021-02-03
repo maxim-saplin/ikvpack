@@ -14,7 +14,8 @@ void main() async {
     setUpAll(() async {
       var ik = IkvPack.fromMap(testMap);
       await ik.saveTo('test/testIkv.dat');
-      setIkv(await IkvPack.load('test/testIkv.dat', true));
+      ik = await IkvPack.load('test/testIkv.dat', true);
+      setIkv(ik);
     });
 
     runCaseInvariantTests();

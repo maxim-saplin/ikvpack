@@ -1,5 +1,5 @@
 import 'package:ikvpack/ikvpack.dart';
-import 'package:ikvpack/src/ikvpack.dart';
+import 'package:ikvpack/src/ikvpack_core.dart';
 import 'package:test/test.dart';
 
 import 'shared.dart';

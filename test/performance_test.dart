@@ -17,7 +17,7 @@ const ruFileCurr = 'test/performance_data/RU_EN Multitran vol.2.dikt';
 const enFileCurr = 'test/performance_data/EN_RU Multitran vol.2.dikt';
 
 void main() async {
-  const skippLongTests = false;
+  const skippLongTests = true;
 
   group('Real file tests', () {
     Future<int> loadCurr(String path, bool keysCaseInsensitive,
@@ -179,18 +179,19 @@ void main() async {
       var pool100 = ikv100.IsolatePool(1);
       await pool100.start();
 
-      await _benchmark(() => loadCurr(ruFileCurr, true, poolCurr), 1, 1);
-      await _benchmark(() => loadIkv200(ruFile200, true, pool200), 1, 1);
-      await _benchmark(() => loadIkv100(ruFile100, true, pool100), 1, 1);
+      await _benchmark(() => loadCurr(ruFileCurr, true, poolCurr), 2, 1);
+      await _benchmark(() => loadIkv200(ruFile200, true, pool200), 2, 1);
+      await _benchmark(() => loadIkv100(ruFile100, true, pool100), 2, 1);
 
       print('Testing...');
 
-      var currentRuInsense =
-          await _benchmark(() => loadCurr(ruFileCurr, true, poolCurr), 3, 1);
       var ikv200RuInsense =
           await _benchmark(() => loadIkv200(ruFile200, true, pool200), 3, 1);
       var ikv100RuInsense =
           await _benchmark(() => loadIkv100(ruFile100, true, pool100), 3, 1);
+
+      var currentRuInsense =
+          await _benchmark(() => loadCurr(ruFileCurr, true, poolCurr), 3, 1);
 
       var currentEnInsense =
           await _benchmark(() => loadCurr(enFileCurr, true, poolCurr), 3, 1);
@@ -329,6 +330,29 @@ void main() async {
         return kk;
       }
 
+      List<String> uint32() {
+        var kk = List<String>.generate(keys.length, (i) {
+          var k = keys[i];
+          var cus = Uint32List(k.length);
+
+          for (var i = 0; i < k.length; i++) {
+            if (k.codeUnits[i] == c1) {
+              cus[i] = cc1;
+            } else if (k.codeUnits[i] == c2) {
+              cus[i] = cc2;
+            } else if (k.codeUnits[i] == c3) {
+              cus[i] = cc3;
+            } else {
+              cus[i] = k.codeUnits[i];
+            }
+          }
+
+          var s = String.fromCharCodes(cus);
+          return s;
+        }, growable: false);
+        return kk;
+      }
+
       List<String> uint16uint16() {
         var kk = List<String>.generate(keys.length, (i) {
           var k = keys[i];
@@ -389,6 +413,7 @@ void main() async {
       var cus = _benchmarkSync(codeUnits);
       var cus2 = _benchmarkSync(codeUnits2);
       var int16 = _benchmarkSync(uint16);
+      var int32 = _benchmarkSync(uint32);
       var int1616 = _benchmarkSync(uint16uint16);
       var just16 = _benchmarkSync(justUint16);
       var cont = _benchmarkSync(contains);
@@ -397,6 +422,7 @@ void main() async {
       cus.prnt('CUS  ');
       cus2.prnt('CUS2 ');
       int16.prnt('INT16 ');
+      int32.prnt('INT32 ');
       int1616.prnt('INT1616 ');
       just16.prnt('JUST16');
       cont.prnt('CONT');
@@ -406,7 +432,7 @@ void main() async {
       //var keys = testMap.keys;
 
       // var ikv = IkvPack(ruFile, false);
-      var ikv = await IkvPack.load(enFile200, false);
+      var ikv = await IkvPack.load(enFileCurr, false);
       var keys = ikv.keys;
 
 // RU

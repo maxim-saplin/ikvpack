@@ -2,7 +2,7 @@
 
 import 'dart:io';
 import 'package:ikvpack/ikvpack.dart';
-import 'package:ikvpack/src/ikvpack.dart';
+import 'package:ikvpack/src/ikvpack_core.dart';
 import 'package:ikvpack/src/isolate_helpers.dart';
 import 'package:test/test.dart';
 
@@ -107,7 +107,7 @@ void main() async {
       for (var i = 0; i < 20; i++) {
         expect(res[i].length, 3);
       }
-    });
+    }, timeout: Timeout(Duration(seconds: 120)));
 
     test('Files size is properly returned', () async {
       expect((await IkvPack.load('test/testIkv.dat')).sizeBytes, 264079);
