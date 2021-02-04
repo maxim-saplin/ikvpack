@@ -504,6 +504,72 @@ void main() async {
     });
   }, skip: true);
 
+  test('Utf8 decode short vs long string', () async {
+    //var keys = testMap.keys;
+
+    // var ikv = IkvPack(ruFile, false);
+    var ikv = await IkvPack.load(ruFileCurr, false);
+    var keys = ikv.keys;
+
+    var singleBytes = <Uint8List>[];
+    var quadraBytes = <Uint8List>[];
+
+    var i = 0;
+    var bb = BytesBuilder();
+
+    var nl = '\n'.codeUnits[0];
+
+    for (var k in keys) {
+      var x = Uint8List.fromList(utf8.encode(k));
+      singleBytes.add(x);
+      i++;
+      bb.add(Uint8List.fromList(utf8.encode(k)));
+      if (i != 4) bb.addByte(nl);
+      if (i == 4) {
+        i = 0;
+        quadraBytes.add(bb.takeBytes());
+      }
+    }
+
+    if (bb.length > 0) {
+      quadraBytes.add(bb.takeBytes());
+    }
+
+    var decoder = Utf8Decoder(allowMalformed: true);
+
+    List<String> single() {
+      var k = <String>[];
+      for (var b in singleBytes) {
+        var s = decoder.convert(b);
+        k.add(s);
+      }
+      return k;
+    }
+
+    List<String> quadra() {
+      var k = <String>[];
+      for (var b in quadraBytes) {
+        var start = 0;
+        var i = 0;
+        for (i = i; i < b.length; i++) {
+          if (b[i] == nl) {
+            var s = decoder.convert(Uint8List.view(b.buffer, start, i - start));
+            k.add(s);
+            start = i + 1;
+          }
+        }
+        var s = decoder.convert(Uint8List.view(b.buffer, start, i - start));
+        k.add(s);
+      }
+      return k;
+    }
+
+    var singleBench = _benchmarkSync(single);
+    var quadraBench = _benchmarkSync(quadra);
+    singleBench.prnt('Single', true);
+    quadraBench.prnt('Quadra', true);
+  });
+
   test('Ikv.fromMap sync vs async', () async {
     void fromMap() {
       var _ = IkvPack.fromMap(testMap);

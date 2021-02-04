@@ -30,11 +30,8 @@ part of ikvpack_core;
 
 class IkvInfo {
   final int sizeBytes;
-  final int keysSizeBytes;
-  final int valuesSizeBytes;
   final int length;
-  IkvInfo(
-      this.sizeBytes, this.length, this.keysSizeBytes, this.valuesSizeBytes);
+  IkvInfo(this.sizeBytes, this.length);
 }
 
 class Headers {
@@ -77,20 +74,25 @@ class Headers {
 class Stats {
   final int keysNumber;
   final int distinctKeysNumber;
+  final int shadowKeysDifferentFromOrigNumber;
   final int keysBytes;
   final int valuesBytes;
+  // keys + values + overhead
+  final int totalBytes;
   final int keysTotalChars;
   final int minKeyLength;
-  final int maxKeyLengthh;
+  final int maxKeyLength;
 
   Stats(
       this.keysNumber,
       this.distinctKeysNumber,
+      this.shadowKeysDifferentFromOrigNumber,
       this.keysBytes,
       this.valuesBytes,
+      this.totalBytes,
       this.keysTotalChars,
       this.minKeyLength,
-      this.maxKeyLengthh);
+      this.maxKeyLength);
 
   double get avgKeyLength => keysTotalChars / keysNumber;
   double get avgKeyBytes => keysBytes / keysNumber;
@@ -106,9 +108,10 @@ abstract class StorageBase {
   Future<Uint8List> value(String key);
   Future<Uint8List> valueAt(int index);
   int get sizeBytes;
-  Future<Stats> getStats();
   void dispose();
   bool get useIndexToGetValue;
+  bool get binaryStore;
+  Headers get headers;
   // the bellow 2 methods are workarounds for passing Storage across isolates,
   // since intenal object RandomAccessFile can't cross isolates boundaries
   // closing file is done in spawned isolate and reopening is done in main isolate
@@ -116,7 +119,7 @@ abstract class StorageBase {
   void reopenFile();
 }
 
-List<String> getKeys(ByteData data, Headers headers) {
+List<String> readKeys(ByteData data, Headers headers) {
   var prev = 0;
   var decoder = Utf8Decoder(allowMalformed: true);
 
@@ -144,7 +147,7 @@ Tupple<List<String>, List<Uint8List>> parseBinary(ByteData data) {
 
   var keysData = data.buffer.asByteData(Headers.keysOffset);
 
-  var keys = getKeys(keysData, headers);
+  var keys = readKeys(keysData, headers);
 
   var prev = headers.offsetsOffset;
 

@@ -9,8 +9,8 @@ class Storage extends StorageBase {
     var f = _file as RandomAccessFile;
     f.setPositionSync(Headers.offset);
     var h = f.readSync(Headers.bytesSize);
-    headers = Headers(h.buffer.asByteData());
-    headers.validate(f.lengthSync());
+    _headers = Headers(h.buffer.asByteData());
+    _headers.validate(f.lengthSync());
   }
 
   RandomAccessFile? _file;
@@ -39,12 +39,15 @@ class Storage extends StorageBase {
 
   final String path;
 
-  late Headers headers;
+  late Headers _headers;
 
   @override
-  bool get noOutOfOrderFlag => headers.noOutOfOrderFlag;
+  Headers get headers => _headers;
+
   @override
-  bool get noUpperCaseFlag => headers.noUpperCaseFlag;
+  bool get noOutOfOrderFlag => _headers.noOutOfOrderFlag;
+  @override
+  bool get noUpperCaseFlag => _headers.noUpperCaseFlag;
 
   @override
   Future<List<String>> readSortedKeys() async {
@@ -71,7 +74,7 @@ class Storage extends StorageBase {
 
     // tried reading file byte after byte, very slow, OS doesnt seem to read ahead and cache future file bytes
     f.setPositionSync(Headers.keysOffset);
-    var bytes = f.readSync(headers.offsetsOffset - Headers.keysOffset).buffer;
+    var bytes = f.readSync(_headers.offsetsOffset - Headers.keysOffset).buffer;
     var bd = bytes.asByteData();
 
     // sw.stop();
@@ -80,7 +83,7 @@ class Storage extends StorageBase {
     // sw.start();
 
     f.setPositionSync(Headers.keysOffset);
-    var keys = getKeys(bd, headers);
+    var keys = readKeys(bd, _headers);
 
     // sw.stop();
     // print('Keys converted from UTF8 ${sw.elapsedMicroseconds}');
@@ -94,8 +97,8 @@ class Storage extends StorageBase {
     //   throw 'Invalid file, number of keys read doesnt match number in headers';
     // }
 
-    f.setPositionSync(headers.offsetsOffset);
-    _valuesOffsets = f.readSync(headers.length * 8).buffer.asByteData();
+    f.setPositionSync(_headers.offsetsOffset);
+    _valuesOffsets = f.readSync(_headers.length * 8).buffer.asByteData();
 
     // sw.stop();
     // sw3.stop();
@@ -138,43 +141,7 @@ class Storage extends StorageBase {
   int get sizeBytes => _file != null ? _file!.lengthSync() : -1;
 
   @override
-  Future<Stats> getStats() async {
-    if (_disposed) throw 'Storage object was disposed, cant use it';
-    var keys = await readSortedKeys();
-
-    var keysNumber = headers.length;
-    var keysBytes = headers.offsetsOffset - 16 - headers.length * 2;
-    //var altKeysBytes = 0;
-    var valuesBytes = sizeBytes - headers.valuesOffset;
-    var keysTotalChars = keys.fold<int>(
-        0, (previousValue, element) => previousValue + element.length);
-
-    var distinctKeysNumber = 1;
-
-    var minKeyLength = 1000000;
-    var maxKeyLength = 0;
-
-    var prev = keys[0];
-    for (var i = 1; i < keys.length; i++) {
-      if (keys[i].length > maxKeyLength) maxKeyLength = keys[i].length;
-      if (keys[i].length < minKeyLength) minKeyLength = keys[i].length;
-      if (prev != keys[i]) {
-        distinctKeysNumber++;
-        prev = keys[i];
-      }
-      // altKeysBytes += keys[i].codeUnits.fold(0, (previousValue, element) {
-      //   return previousValue +
-      //       (element > 127
-      //           ? (element > 2047 ? (element > 65535 ? 4 : 3) : 2)
-      //           : 1);
-      // });
-    }
-
-    var stats = Stats(keysNumber, distinctKeysNumber, keysBytes, valuesBytes,
-        keysTotalChars, minKeyLength, maxKeyLength);
-
-    return stats;
-  }
+  bool get binaryStore => true;
 }
 
 void deleteFromPath(String path) {
@@ -187,7 +154,7 @@ Future<IkvInfo> storageGetInfo(String path) async {
   await raf.setPosition(4);
   var length = await _readUint32Async(raf);
   await raf.close();
-  return IkvInfo(await f.length(), length, 0, 0);
+  return IkvInfo(await f.length(), length);
 }
 
 Future<int> _readUint32Async(RandomAccessFile raf,

@@ -445,15 +445,6 @@ class IkvPack {
     return saveToPath(path, _originalKeys, _values, updateProgress);
   }
 
-  /// Can be slow
-  Future<Stats>? getStats() {
-    try {
-      return _storage!.getStats();
-    } catch (_) {
-      return null;
-    }
-  }
-
   /// Creates a list of entries for a given range (if provided) or all keys/values.
   /// Key order is preserved
   Future<LinkedHashMap<String, Uint8List>> getRangeRaw(
@@ -780,6 +771,113 @@ class IkvPack {
     }
 
     return matches;
+  }
+
+  /// Can be slow
+  Future<Stats> getStats() async {
+    if (_storage == null) {
+      throw 'Cant get stats on in-memory instance, only file based';
+    }
+    if (!_storage!.binaryStore) {
+      throw 'Cant get stats on non-file based IkvPack';
+    }
+
+    var _headers = _storage!.headers;
+
+    var keysNumber = _headers.length;
+    var keysBytes = _headers.offsetsOffset - 16 - _headers.length * 2;
+    //var altKeysBytes = 0;
+    var valuesBytes = sizeBytes - _headers.valuesOffset;
+    var keysTotalChars = _originalKeys.fold<int>(
+        0, (previousValue, element) => previousValue + element.length);
+
+    var distinctKeysNumber = 1;
+
+    var minKeyLength = 1000000;
+    var maxKeyLength = 0;
+
+    var prev = _originalKeys[0];
+    for (var i = 1; i < _originalKeys.length; i++) {
+      if (_originalKeys[i].length > maxKeyLength) {
+        maxKeyLength = _originalKeys[i].length;
+      }
+      if (_originalKeys[i].length < minKeyLength) {
+        minKeyLength = _originalKeys[i].length;
+      }
+      if (prev != _originalKeys[i]) {
+        distinctKeysNumber++;
+        prev = _originalKeys[i];
+      }
+      // altKeysBytes += keys[i].codeUnits.fold(0, (previousValue, element) {
+      //   return previousValue +
+      //       (element > 127
+      //           ? (element > 2047 ? (element > 65535 ? 4 : 3) : 2)
+      //           : 1);
+      // });
+    }
+
+    var shadowDiff = -1;
+
+    if (shadowKeysUsed) {
+      for (var i = 0; i < _originalKeys.length; i++) {
+        if (_shadowKeys[i] != _originalKeys[i]) {
+          shadowDiff++;
+        }
+      }
+    }
+
+    var stats = Stats(
+        keysNumber,
+        distinctKeysNumber,
+        shadowDiff,
+        keysBytes,
+        valuesBytes,
+        _storage!.sizeBytes,
+        keysTotalChars,
+        minKeyLength,
+        maxKeyLength);
+
+    return stats;
+  }
+
+  static Future<String> getStatsAsCsv(Iterable<IkvPack> packs) async {
+    var s = StringBuffer(
+        'Ikv;keysNumber;distinctKeysNumber;shadowKeysDifferentFromOrigNumber;'
+        'keysBytes;valuesBytes;keysTotalChars;minKeyLength;maxKeyLength;avgKeyLength;'
+        'avgKeyBytes;avgCharBytes;avgValueBytes;\n');
+
+    for (var i in packs) {
+      print('Getting stats for ${i._storage!.path}');
+      var stats = await i.getStats();
+      s.write(i._storage!.path);
+      s.write(';');
+      s.write(stats.keysNumber);
+      s.write(';');
+      s.write(stats.distinctKeysNumber);
+      s.write(';');
+      s.write(stats.shadowKeysDifferentFromOrigNumber);
+      s.write(';');
+      s.write(stats.keysBytes);
+      s.write(';');
+      s.write(stats.valuesBytes);
+      s.write(';');
+      s.write(stats.keysTotalChars);
+      s.write(';');
+      s.write(stats.minKeyLength);
+      s.write(';');
+      s.write(stats.maxKeyLength);
+      s.write(';');
+      s.write(stats.avgKeyLength);
+      s.write(';');
+      s.write(stats.avgKeyBytes);
+      s.write(';');
+      s.write(stats.avgCharBytes);
+      s.write(';');
+      s.write(stats.avgValueBytes);
+      s.writeln(';');
+    }
+
+    return s.toString();
   }
 }
 

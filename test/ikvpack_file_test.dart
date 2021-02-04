@@ -40,6 +40,16 @@ void main() async {
 
     runCaseInvariantTests();
     runCaseInsensitiveTests();
+
+    test('Stats is fecthed', () async {
+      var stats = await ikv.getStats();
+      expect(stats.keysNumber, 1436);
+    });
+
+    test('Stats is fecthed as CSV', () async {
+      var stats = await IkvPack.getStatsAsCsv([ikv, ikv]);
+      expect(stats.split('\n').length, 3);
+    });
   });
 
   group('File tests', () {

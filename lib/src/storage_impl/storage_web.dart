@@ -26,11 +26,6 @@ class Storage implements StorageBase {
   }
 
   @override
-  Future<Stats> getStats() {
-    throw UnimplementedError();
-  }
-
-  @override
   bool get noOutOfOrderFlag => false;
 
   @override
@@ -80,6 +75,12 @@ class Storage implements StorageBase {
     var list = bytes.asUint8List();
     return list;
   }
+
+  @override
+  bool get binaryStore => false;
+
+  @override
+  Headers get headers => throw UnimplementedError();
 }
 
 const String _storeKeys = 'keys';
@@ -164,5 +165,5 @@ Future<IkvInfo> storageGetInfo(String path) async {
   var db = await _getDb(path);
   var keys = await _getKeyStoreInDb(db);
   var count = await keys.count();
-  return IkvInfo(-1, count, -1, -1);
+  return IkvInfo(-1, count);
 }
