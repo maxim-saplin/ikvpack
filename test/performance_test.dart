@@ -11,8 +11,8 @@ import 'package:ikvpack_200/ikvpack.dart' as ikv200;
 
 const ruFile100 = 'test/performance_data/100/RU_EN Multitran vol.2.dikt';
 const enFile100 = 'test/performance_data/100/EN_RU Multitran vol.2.dikt';
-const ruFile200 = 'test/performance_data/RU_EN Multitran vol.2.dikt';
-const enFile200 = 'test/performance_data/EN_RU Multitran vol.2.dikt';
+const ruFile200 = 'test/performance_data/200/RU_EN Multitran vol.2.dikt';
+const enFile200 = 'test/performance_data/200/EN_RU Multitran vol.2.dikt';
 const ruFileCurr = 'test/performance_data/RU_EN Multitran vol.2.dikt';
 const enFileCurr = 'test/performance_data/EN_RU Multitran vol.2.dikt';
 

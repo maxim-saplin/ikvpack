@@ -117,6 +117,7 @@ void main() async {
 
       for (var i = 0; i < 20; i++) {
         expect(res[i].length, 3);
+        expect(await res[i]['c'], 'ccc');
       }
     }, timeout: Timeout(Duration(seconds: 120)));
 
@@ -180,7 +181,7 @@ void main() async {
       expect(ikv11.noOutOfOrderFlag, true);
       expect(ikv11.noUpperCaseFlag, true);
       expect(ikv11.shadowKeysUsed, false);
-    }, skip: true);
+    });
   });
 
   setUpAll(() {

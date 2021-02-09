@@ -41,7 +41,7 @@ class IkvPack {
     late IkvPackData data;
 
     try {
-      data = await ikv._storage!.readSortedData();
+      data = await ikv._storage!.readSortedData(keysCaseInsensitive);
     } catch (e) {
       ikv._storage?.dispose();
       rethrow;
@@ -60,8 +60,13 @@ class IkvPack {
     if (updateProgress?.call(1) == true) return;
 
     if (data.shadowKeys.isNotEmpty) {
-      ikv._shadowKeys = data.shadowKeys;
-      ikv._shadowKeysUsed = true;
+      if (ikv._storage == null ||
+          !(ikv._storage!.noUpperCaseFlag && ikv._storage!.noOutOfOrderFlag)) {
+        ikv._shadowKeys = data.shadowKeys;
+        ikv._shadowKeysUsed = true;
+      } else {
+        ikv._shadowKeysUsed = false;
+      }
     } else {
       // check if there's need for shadow keys
       if (keysCaseInsensitive &&
@@ -132,11 +137,13 @@ class IkvPack {
       var data = await pool.scheduleJob(IkvPooledJob(path, keysCaseInsensitive))
           as IkvPackData;
       var ikv = IkvPack._(path, keysCaseInsensitive);
-      ikv._originalKeys = data.originalKeys;
-      ikv._keysReadOnly = UnmodifiableListView<String>(ikv._originalKeys);
-      ikv._keyBaskets = data.keyBaskets;
-      ikv._shadowKeysUsed = data.shadowKeys.isNotEmpty;
-      ikv._shadowKeys = data.shadowKeys;
+      _build(ikv, data, keysCaseInsensitive);
+      // ikv._originalKeys = data.originalKeys;
+      // ikv._keysReadOnly = UnmodifiableListView<String>(ikv._originalKeys);
+      // ikv._keyBaskets = data.keyBaskets;
+      // ikv._shadowKeysUsed = data.shadowKeys.isNotEmpty;
+      // ikv._shadowKeys = data.shadowKeys;
+      ikv._storage?.reopenFile();
 
       completer.complete(ikv);
     } catch (e) {
@@ -290,7 +297,7 @@ class IkvPack {
       : _valuesInMemory = true,
         _storage = null {
     if (updateProgress?.call(0) == true) return;
-    var t = parseBinary(bytes);
+    var t = parseBinary(bytes, keysCaseInsensitive);
 
     if (updateProgress?.call(30) == true) return;
 
@@ -307,7 +314,7 @@ class IkvPack {
       [keysCaseInsensitive = true,
       Future? Function(int progressPercent)? updateProgress]) async {
     if (updateProgress != null && await updateProgress(0) == null) return null;
-    var t = parseBinary(bytes);
+    var t = parseBinary(bytes, keysCaseInsensitive);
     if (updateProgress != null && await updateProgress(30) == null) return null;
 
     var ikv = IkvPack.__(keysCaseInsensitive);

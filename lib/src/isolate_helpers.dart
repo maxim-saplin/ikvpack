@@ -142,19 +142,19 @@ void _pooledIsolateBody(_PooledIsolateParams params) async {
   isolatePort.listen((message) async {
     if (message is _PooledJob) {
       try {
-        params.stopwatch.reset();
-        params.stopwatch.start();
+        // params.stopwatch.reset();
+        // params.stopwatch.start();
         //print('Job index ${message.jobIndex}');
 
         var result = await message.job.job();
-        params.stopwatch.stop();
-        print('Job done in ${params.stopwatch.elapsedMilliseconds} ms');
-        params.stopwatch.reset();
-        params.stopwatch.start();
+        // params.stopwatch.stop();
+        // print('Job done in ${params.stopwatch.elapsedMilliseconds} ms');
+        // params.stopwatch.reset();
+        // params.stopwatch.start();
         params.sendPort.send(
             _PooledJobResult(result, message.jobIndex, message.isolateIndex));
-        params.stopwatch.stop();
-        print('Job result sent in ${params.stopwatch.elapsedMilliseconds} ms');
+        // params.stopwatch.stop();
+        // print('Job result sent in ${params.stopwatch.elapsedMilliseconds} ms');
       } catch (e) {
         var r = _PooledJobResult(null, message.jobIndex, message.isolateIndex);
         r.error = e;

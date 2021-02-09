@@ -125,7 +125,7 @@ abstract class StorageBase {
   bool get noOutOfOrderFlag;
   bool get noUpperCaseFlag;
 
-  Future<IkvPackData> readSortedData();
+  Future<IkvPackData> readSortedData(bool getShadowKeys);
   Future<Uint8List> value(String key);
   Future<Uint8List> valueAt(int index);
   int get sizeBytes;
@@ -209,15 +209,19 @@ List<KeyBasket> readKeyBaskets(ByteData data, Headers headers) {
   return baskets;
 }
 
-Tupple<IkvPackData, List<Uint8List>> parseBinary(ByteData data) {
+Tupple<IkvPackData, List<Uint8List>> parseBinary(
+    ByteData data, bool getShadowKeys) {
   var headers = Headers.fromBytes(data);
   headers.validate(data.lengthInBytes);
 
   var d = data.buffer.asByteData(Headers.keysOffset);
   var keys = readKeys(d, headers);
 
-  d = data.buffer.asByteData(headers.shadowOffset);
-  var shadowKeys = readShadowKeys(d, keys, headers);
+  var shadowKeys = <String>[];
+  if (getShadowKeys) {
+    d = data.buffer.asByteData(headers.shadowOffset);
+    shadowKeys = readShadowKeys(d, keys, headers);
+  }
 
   d = data.buffer.asByteData(headers.basketsOffset);
   var baskets = readKeyBaskets(d, headers);

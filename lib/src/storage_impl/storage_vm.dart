@@ -50,7 +50,7 @@ class Storage extends StorageBase {
   bool get noUpperCaseFlag => _headers.noUpperCaseFlag;
 
   @override
-  Future<IkvPackData> readSortedData() async {
+  Future<IkvPackData> readSortedData(bool getShadowKeys) async {
     // var sw = Stopwatch();
     // var sw2 = Stopwatch();
     // var sw3 = Stopwatch();
@@ -89,11 +89,14 @@ class Storage extends StorageBase {
 
     var shadowKeys = <String>[];
 
-    if (headers.shadowCount > 0) {
-      f.setPositionSync(_headers.shadowOffset);
-      bytes = f.readSync(_headers.basketsOffset - _headers.shadowOffset).buffer;
-      bd = bytes.asByteData();
-      shadowKeys = readShadowKeys(bd, keys, _headers);
+    if (getShadowKeys) {
+      if (headers.shadowCount > 0) {
+        f.setPositionSync(_headers.shadowOffset);
+        bytes =
+            f.readSync(_headers.basketsOffset - _headers.shadowOffset).buffer;
+        bd = bytes.asByteData();
+        shadowKeys = readShadowKeys(bd, keys, _headers);
+      }
     }
 
     f.setPositionSync(_headers.basketsOffset);
@@ -113,8 +116,7 @@ class Storage extends StorageBase {
 
     //print('Creating view ${sw.elapsedMilliseconds}');
 
-    f.setPositionSync(_headers.offsetsOffset);
-    _valuesOffsets = f.readSync(_headers.count * 4 + 4).buffer.asByteData();
+    _readValueOffsets();
 
     // sw.stop();
     // sw3.stop();
@@ -124,6 +126,14 @@ class Storage extends StorageBase {
     var data = IkvPackData(keys, shadowKeys, baskets);
 
     return data;
+  }
+
+  void _readValueOffsets() {
+    if (_file != null) {
+      _file!.setPositionSync(_headers.offsetsOffset);
+      _valuesOffsets =
+          _file!.readSync(_headers.count * 4 + 4).buffer.asByteData();
+    }
   }
 
   /// File storage only supports referencing values by index
@@ -153,6 +163,7 @@ class Storage extends StorageBase {
   @override
   void reopenFile() {
     _file = File(path).openSync();
+    _readValueOffsets();
   }
 
   @override
