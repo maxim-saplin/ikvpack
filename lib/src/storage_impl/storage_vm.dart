@@ -9,13 +9,13 @@ class Storage extends StorageBase {
     var f = _file as RandomAccessFile;
     f.setPositionSync(Headers.offset);
     var h = f.readSync(Headers.bytesSize);
-    _headers = Headers(h.buffer.asByteData());
+    _headers = Headers.fromBytes(h.buffer.asByteData());
     _headers.validate(f.lengthSync());
   }
 
   RandomAccessFile? _file;
   bool _disposed = false;
-  //List<_OffsetLength> _offsets = <_OffsetLength>[];
+  // List<_OffsetLength> _offsets = <_OffsetLength>[];
   // Trading off faster dictionaru load time for slower value lookup
   // Cleaner approach with _OffsetLength list gave ~900ms load time on a large dictionary (2+ mln records)
   // Just reading data and storing ByteData gave ~660ms. It seems reasonable to avoid the delay
@@ -50,7 +50,7 @@ class Storage extends StorageBase {
   bool get noUpperCaseFlag => _headers.noUpperCaseFlag;
 
   @override
-  Future<List<String>> readSortedKeys() async {
+  Future<IkvPackData> readSortedData() async {
     // var sw = Stopwatch();
     // var sw2 = Stopwatch();
     // var sw3 = Stopwatch();
@@ -74,16 +74,36 @@ class Storage extends StorageBase {
 
     // tried reading file byte after byte, very slow, OS doesnt seem to read ahead and cache future file bytes
     f.setPositionSync(Headers.keysOffset);
-    var bytes = f.readSync(_headers.offsetsOffset - Headers.keysOffset).buffer;
+    var bytes = f.readSync(_headers.shadowOffset - Headers.keysOffset).buffer;
     var bd = bytes.asByteData();
+    var keys = readKeys(bd, _headers);
+
+    if (keys.length != _headers.count) {
+      throw 'Invalid file, number of keys read doesnt match number in headers';
+    }
 
     // sw.stop();
     // print('Keys read ${sw.elapsedMicroseconds}');
     // sw.reset();
     // sw.start();
 
-    f.setPositionSync(Headers.keysOffset);
-    var keys = readKeys(bd, _headers);
+    var shadowKeys = <String>[];
+
+    if (headers.shadowCount > 0) {
+      f.setPositionSync(_headers.shadowOffset);
+      bytes = f.readSync(_headers.basketsOffset - _headers.shadowOffset).buffer;
+      bd = bytes.asByteData();
+      shadowKeys = readShadowKeys(bd, keys, _headers);
+    }
+
+    f.setPositionSync(_headers.basketsOffset);
+    bytes = f.readSync(_headers.offsetsOffset - _headers.basketsOffset).buffer;
+    bd = bytes.asByteData();
+    var baskets = readKeyBaskets(bd, _headers);
+
+    if (baskets.length != _headers.basketsCount) {
+      throw 'Invalid file, number of baskets read doesnt match number in headers';
+    }
 
     // sw.stop();
     // print('Keys converted from UTF8 ${sw.elapsedMicroseconds}');
@@ -93,19 +113,17 @@ class Storage extends StorageBase {
 
     //print('Creating view ${sw.elapsedMilliseconds}');
 
-    // if (keys.length != _length) {
-    //   throw 'Invalid file, number of keys read doesnt match number in headers';
-    // }
-
     f.setPositionSync(_headers.offsetsOffset);
-    _valuesOffsets = f.readSync(_headers.length * 8).buffer.asByteData();
+    _valuesOffsets = f.readSync(_headers.count * 4 + 4).buffer.asByteData();
 
     // sw.stop();
     // sw3.stop();
     // print('Offsets read ${sw.elapsedMicroseconds}');
     // print('Total read keys ${sw3.elapsedMicroseconds}');
 
-    return keys;
+    var data = IkvPackData(keys, shadowKeys, baskets);
+
+    return data;
   }
 
   /// File storage only supports referencing values by index
@@ -122,13 +140,13 @@ class Storage extends StorageBase {
   @override
   Future<Uint8List> valueAt(int index) async {
     if (_disposed) throw 'Storage object was disposed, cant use it';
-    var o = index * 8;
-    var offset = _valuesOffsets.getUint32(o);
-    var length = _valuesOffsets.getUint32(o + 4);
+    var o = index * 4;
+    var offset = _valuesOffsets.getUint32(o, Endian.little);
+    var offset2 = _valuesOffsets.getUint32(o + 4, Endian.little);
     var f = _file as RandomAccessFile;
     f.setPositionSync(offset);
     //var value = await f.read(length);
-    var value = f.readSync(length);
+    var value = f.readSync(offset2 - offset);
     return value;
   }
 
@@ -178,54 +196,114 @@ void _writeUint16(RandomAccessFile raf, int value) {
   raf.writeFromSync(bd.buffer.asUint8List());
 }
 
-Future<void> saveToPath(String path, List<String> keys, List<Uint8List> values,
+Future<void> saveToPath(String path, IkvPackData data, List<Uint8List> values,
     [Function(int progressPercent)? updateProgress]) async {
   var raf = File(path).openSync(mode: FileMode.write);
   try {
-    raf.setPositionSync(4); //skip reserved
-    _writeUint32(raf, keys.length);
-    raf.setPositionSync(16); //skip offsets and values headers
-    for (var k in keys) {
-      var line = utf8.encode(k);
-      _writeUint16(raf, line.length);
+    var lengths = Uint16List(data.originalKeys.length);
+
+    raf.setPositionSync(Headers.keysOffset + 2 * data.originalKeys.length);
+
+    for (var i = 0; i < data.originalKeys.length; i++) {
+      var line = utf8.encode(data.originalKeys[i]);
+      lengths[i] = line.length;
       raf.writeFromSync(line);
     }
-    // write offsets posisition
+
+    var align = 4 - raf.positionSync() % 4;
+    if (align != 4) {
+      for (var i = 0; i < align; i++) {
+        raf.writeByteSync(0);
+      }
+    }
+
+    var shadowOffset = raf.positionSync();
+    var basketsOffset = raf.positionSync();
+    var shadowCount = 0;
+
+    var lBytes = lengths.buffer.asUint8List();
+    raf.setPositionSync(Headers.keysOffset);
+    raf.writeFromSync(lBytes);
+
+    if (data.shadowKeys.isNotEmpty) {
+      var indexes = <int>[];
+
+      for (var i = 0; i < data.originalKeys.length; i++) {
+        if (data.originalKeys[i] != data.shadowKeys[i]) {
+          indexes.add(i);
+        }
+      }
+
+      var ll = Uint16List(indexes.length);
+      var ii = Uint32List.fromList(indexes);
+
+      shadowCount = ll.length;
+
+      raf.setPositionSync(shadowOffset + 6 * ll.length);
+
+      for (var i = 0; i < indexes.length; i++) {
+        var line = utf8.encode(data.shadowKeys[indexes[i]]);
+        ll[i] = line.length;
+        raf.writeFromSync(line);
+      }
+
+      align = 2 - raf.positionSync() % 2;
+      if (align != 2) {
+        for (var i = 0; i < align; i++) {
+          raf.writeByteSync(0);
+        }
+      }
+
+      basketsOffset = raf.positionSync();
+
+      raf.setPositionSync(shadowOffset);
+
+      raf.writeFromSync(ii.buffer.asUint8List());
+      raf.writeFromSync(ll.buffer.asUint8List());
+    }
+
+    raf.setPositionSync(basketsOffset);
+
+    for (var b in data.keyBaskets) {
+      _writeUint16(raf, b.firstLetter);
+      _writeUint32(raf, b.startIndex);
+    }
+
+    align = 4 - raf.positionSync() % 4;
+    if (align != 4) {
+      for (var i = 0; i < align; i++) {
+        raf.writeByteSync(0);
+      }
+    }
+
     var offsetsOffset = raf.positionSync();
-    raf.setPositionSync(8);
-    _writeUint32(raf, offsetsOffset);
-
     // move to values section start
-    var valuesOffset = offsetsOffset + 8 * keys.length;
-    _writeUint32(raf, valuesOffset); // write values posisition
+    var valuesOffset = offsetsOffset + 4 * data.originalKeys.length + 4;
+
     raf.setPositionSync(valuesOffset);
-    var offsets = <_OffsetLength>[];
+    var offsets = Uint32List(values.length + 1);
+    var currOffset = valuesOffset;
+    var i = 1;
+    offsets[0] = currOffset;
 
     for (var v in values) {
-      var ol = _OffsetLength(valuesOffset, v.length);
-      valuesOffset += v.length;
-      offsets.add(ol);
       raf.writeFromSync(v);
+      currOffset += v.length;
+      offsets[i++] = currOffset;
     }
+    offsets[offsets.length - 1] = raf.lengthSync();
 
-    // write offsets
     raf.setPositionSync(offsetsOffset);
-    for (var ol in offsets) {
-      _writeUint32(raf, ol.offset);
-      _writeUint32(raf, ol.length);
-    }
+    raf.writeFromSync(offsets.buffer.asUint8List());
 
-    //  write values
-    for (var v in values) {
-      raf.writeFromSync(v);
-    }
+    // write headers
+
+    var headers = Headers(0, data.originalKeys.length, shadowCount,
+        shadowOffset, basketsOffset, offsetsOffset, valuesOffset);
+    var bd = headers.toBytes();
+    raf.setPositionSync(0);
+    raf.writeFromSync(bd.buffer.asUint8List());
   } finally {
     await raf.close();
   }
-}
-
-class _OffsetLength {
-  final int offset;
-  final int length;
-  _OffsetLength(this.offset, this.length);
 }

@@ -20,18 +20,17 @@ void _loadIkv(_IsolateParams params) async {
   }
 }
 
-class IkvPooledJob extends PooledJob<_IkvPackData> {
+class IkvPooledJob extends PooledJob<IkvPackData> {
   final String path;
   final bool keysCaseInsensitive;
 
   IkvPooledJob(this.path, this.keysCaseInsensitive);
 
   @override
-  Future<_IkvPackData> job() async {
+  Future<IkvPackData> job() async {
     var ikv = await IkvPack.load(path, keysCaseInsensitive);
     ikv._storage?.close();
-    var data = _IkvPackData(ikv._originalKeys,
-        ikv._shadowKeysUsed ? ikv._shadowKeys : null, ikv._keyBaskets);
+    var data = IkvPackData(ikv._originalKeys, ikv._shadowKeys, ikv._keyBaskets);
     return data;
   }
 }

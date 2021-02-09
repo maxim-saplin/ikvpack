@@ -22,14 +22,6 @@ List<String> keysStartingWith(Iterable<IkvPack> packs) {
   return keys;
 }
 
-class _IkvPackData {
-  final List<String> _originalKeys;
-  final List<String>? _shadowKeys;
-  final List<KeyBasket> _keyBaskets;
-
-  _IkvPackData(this._originalKeys, this._shadowKeys, this._keyBaskets);
-}
-
 class IkvPack {
   final Storage? _storage;
 
@@ -46,34 +38,61 @@ class IkvPack {
 
   static Future<IkvPack> load(String path, [keysCaseInsensitive = true]) async {
     var ikv = IkvPack._(path, keysCaseInsensitive);
+    late IkvPackData data;
+
     try {
-      ikv._originalKeys = await ikv._storage!.readSortedKeys();
+      data = await ikv._storage!.readSortedData();
     } catch (e) {
       ikv._storage?.dispose();
       rethrow;
     }
 
-    // check if there's need for shadow keys
-    if (!(ikv._storage!.noUpperCaseFlag && ikv._storage!.noOutOfOrderFlag)) {
-      if (keysCaseInsensitive) {
+    _build(ikv, data, keysCaseInsensitive);
+
+    return ikv;
+  }
+
+  static void _build(IkvPack ikv, IkvPackData data, keysCaseInsensitive,
+      [Function(int progressPercent)? updateProgress]) {
+    if (updateProgress?.call(0) == true) return;
+    ikv._originalKeys = data.originalKeys;
+
+    if (updateProgress?.call(1) == true) return;
+
+    if (data.shadowKeys.isNotEmpty) {
+      ikv._shadowKeys = data.shadowKeys;
+      ikv._shadowKeysUsed = true;
+    } else {
+      // check if there's need for shadow keys
+      if (keysCaseInsensitive &&
+          (ikv._storage == null ||
+              !(ikv._storage!.noUpperCaseFlag &&
+                  ikv._storage!.noOutOfOrderFlag))) {
         ikv._shadowKeysUsed = true;
         ikv._shadowKeys = List.generate(ikv._originalKeys.length, (i) {
-          var k = ikv._storage!.noUpperCaseFlag
+          var k = ikv._storage != null && ikv._storage!.noUpperCaseFlag
               ? ikv._originalKeys[i]
               : ikv._originalKeys[i].toLowerCase();
           if (!ikv._storage!.noOutOfOrderFlag) k = fixOutOfOrder(k);
           return k;
         }, growable: false);
+      } else {
+        ikv._shadowKeysUsed = false;
       }
-    } else {
-      ikv._shadowKeysUsed = false;
     }
+
+    if (updateProgress?.call(30) == true) return;
 
     ikv._keysReadOnly = UnmodifiableListView<String>(ikv._originalKeys);
 
-    ikv._buildBaskets();
+    if (updateProgress?.call(60) == true) return;
+    if (data.keyBaskets.isNotEmpty) {
+      ikv._keyBaskets = data.keyBaskets;
+    } else {
+      ikv._buildBaskets();
+    }
 
-    return ikv;
+    if (updateProgress?.call(100) == true) return;
   }
 
   static Future<IkvPack> loadInIsolate(String path,
@@ -111,13 +130,13 @@ class IkvPack {
 
     try {
       var data = await pool.scheduleJob(IkvPooledJob(path, keysCaseInsensitive))
-          as _IkvPackData;
+          as IkvPackData;
       var ikv = IkvPack._(path, keysCaseInsensitive);
-      ikv._originalKeys = data._originalKeys;
+      ikv._originalKeys = data.originalKeys;
       ikv._keysReadOnly = UnmodifiableListView<String>(ikv._originalKeys);
-      ikv._keyBaskets = data._keyBaskets;
-      ikv._shadowKeysUsed = data._shadowKeys != null;
-      if (data._shadowKeys != null) ikv._shadowKeys = data._shadowKeys!;
+      ikv._keyBaskets = data.keyBaskets;
+      ikv._shadowKeysUsed = data.shadowKeys.isNotEmpty;
+      ikv._shadowKeys = data.shadowKeys;
 
       completer.complete(ikv);
     } catch (e) {
@@ -270,22 +289,16 @@ class IkvPack {
       Function(int progressPercent)? updateProgress])
       : _valuesInMemory = true,
         _storage = null {
+    if (updateProgress?.call(0) == true) return;
     var t = parseBinary(bytes);
-    var entries = _getSortedEntriesFromLists(t.item1, t.item2);
-    if (updateProgress != null) updateProgress(5);
 
-    _buildOriginalKeys(entries);
-    if (updateProgress != null) updateProgress(10);
+    if (updateProgress?.call(30) == true) return;
 
-    _buildShadowKeys(entries);
+    _build(this, t.item1, keysCaseInsensitive,
+        (progress) => updateProgress?.call((30 + 0.69 * progress).round()));
 
     _values = t.item2;
-
-    if (updateProgress != null) updateProgress(95);
-
-    _keysReadOnly = UnmodifiableListView<String>(_originalKeys);
-    _buildBaskets();
-    if (updateProgress != null) updateProgress(100);
+    if (updateProgress?.call(100) == true) return;
   }
 
   /// Creates object from binary DIKT image (e.g. when DIKT file is loaded to memory)
@@ -295,22 +308,16 @@ class IkvPack {
       Future? Function(int progressPercent)? updateProgress]) async {
     if (updateProgress != null && await updateProgress(0) == null) return null;
     var t = parseBinary(bytes);
-    if (updateProgress != null && await updateProgress(20) == null) return null;
+    if (updateProgress != null && await updateProgress(30) == null) return null;
 
     var ikv = IkvPack.__(keysCaseInsensitive);
-    var entries = ikv._getSortedEntriesFromLists(t.item1, t.item2);
-    if (updateProgress != null && await updateProgress(40) == null) return null;
 
-    ikv._buildOriginalKeys(entries);
-    if (updateProgress != null && await updateProgress(60) == null) return null;
-
-    ikv._buildShadowKeys(entries);
-    if (updateProgress != null && await updateProgress(80) == null) return null;
+    _build(ikv, t.item1, keysCaseInsensitive, (progress) async {
+      return await updateProgress?.call(30 + (0.69 * progress).round());
+    });
 
     ikv._values = t.item2;
-    ikv._keysReadOnly = UnmodifiableListView<String>(ikv._originalKeys);
 
-    ikv._buildBaskets();
     if (updateProgress != null && await updateProgress(100) == null) {
       return null;
     }
@@ -360,38 +367,38 @@ class IkvPack {
     return list;
   }
 
-  List<_Triple<Uint8List>> _getSortedEntriesFromLists(
-      List<String> keys, List<Uint8List> values) {
-    assert(keys.isNotEmpty, 'Keys can\'t be empty');
-    assert(values.isNotEmpty, 'Values can\'t be empty');
-    if (keys.length != values.length) {
-      throw 'keys.length isn\'t equal to values.length';
-    }
+  // List<_Triple<Uint8List>> _getSortedEntriesFromLists(
+  //     List<String> keys, List<Uint8List> values) {
+  //   assert(keys.isNotEmpty, 'Keys can\'t be empty');
+  //   assert(values.isNotEmpty, 'Values can\'t be empty');
+  //   if (keys.length != values.length) {
+  //     throw 'keys.length isn\'t equal to values.length';
+  //   }
 
-    Iterable<_Triple<Uint8List>>? entries;
+  //   Iterable<_Triple<Uint8List>>? entries;
 
-    if (keysCaseInsensitive) {
-      entries = List<_Triple<Uint8List>>.generate(keys.length,
-          (index) => _Triple<Uint8List>.lowerCase(keys[index], values[index]));
-    } else {
-      entries = List<_Triple<Uint8List>>.generate(
-          keys.length,
-          (index) =>
-              _Triple<Uint8List>.noLowerCase(keys[index], values[index]));
-    }
+  //   if (keysCaseInsensitive) {
+  //     entries = List<_Triple<Uint8List>>.generate(keys.length,
+  //         (index) => _Triple<Uint8List>.lowerCase(keys[index], values[index]));
+  //   } else {
+  //     entries = List<_Triple<Uint8List>>.generate(
+  //         keys.length,
+  //         (index) =>
+  //             _Triple<Uint8List>.noLowerCase(keys[index], values[index]));
+  //   }
 
-    var list = _fixKeysAndValues<Uint8List>(entries);
+  //   var list = _fixKeysAndValues<Uint8List>(entries);
 
-    assert(list.isNotEmpty, 'Refined Key/Value collection can\'t be empty');
+  //   assert(list.isNotEmpty, 'Refined Key/Value collection can\'t be empty');
 
-    if (keysCaseInsensitive) {
-      list.sort((e1, e2) => e1.keyLowerCase.compareTo(e2.keyLowerCase));
-    } else {
-      list.sort((e1, e2) => e1.key.compareTo(e2.key));
-    }
+  //   if (keysCaseInsensitive) {
+  //     list.sort((e1, e2) => e1.keyLowerCase.compareTo(e2.keyLowerCase));
+  //   } else {
+  //     list.sort((e1, e2) => e1.key.compareTo(e2.key));
+  //   }
 
-    return list;
-  }
+  //   return list;
+  // }
 
   List<_Triple<T>> _fixKeysAndValues<T>(Iterable<_Triple> entries) {
     var fixed = <_Triple<T>>[];
@@ -442,7 +449,8 @@ class IkvPack {
   /// Unlike buildFromMapAsyn()c there's no need to return Future from the callback (and await it inside the method to free microtask queue and unblock UI, there're other awaits that allow to do this without extra Future)
   Future<void> saveTo(String path,
       [Function(int progressPercent)? updateProgress]) async {
-    return saveToPath(path, _originalKeys, _values, updateProgress);
+    var data = IkvPackData(_originalKeys, _shadowKeys, _keyBaskets);
+    return saveToPath(path, data, _values, updateProgress);
   }
 
   /// Creates a list of entries for a given range (if provided) or all keys/values.
@@ -784,8 +792,8 @@ class IkvPack {
 
     var _headers = _storage!.headers;
 
-    var keysNumber = _headers.length;
-    var keysBytes = _headers.offsetsOffset - 16 - _headers.length * 2;
+    var keysNumber = _headers.count;
+    var keysBytes = _headers.offsetsOffset - 16 - _headers.count * 2;
     //var altKeysBytes = 0;
     var valuesBytes = sizeBytes - _headers.valuesOffset;
     var keysTotalChars = _originalKeys.fold<int>(
@@ -844,11 +852,12 @@ class IkvPack {
     var s = StringBuffer(
         'Ikv;keysNumber;distinctKeysNumber;shadowKeysDifferentFromOrigNumber;'
         'keysBytes;valuesBytes;keysTotalChars;minKeyLength;maxKeyLength;avgKeyLength;'
-        'avgKeyBytes;avgCharBytes;avgValueBytes;\n');
+        'avgKeyBytes;avgCharBytes;avgValueBytes;');
 
     for (var i in packs) {
       print('Getting stats for ${i._storage!.path}');
       var stats = await i.getStats();
+      s.writeln();
       s.write(i._storage!.path);
       s.write(';');
       s.write(stats.keysNumber);
@@ -874,7 +883,7 @@ class IkvPack {
       s.write(stats.avgCharBytes);
       s.write(';');
       s.write(stats.avgValueBytes);
-      s.writeln(';');
+      s.write(';');
     }
 
     return s.toString();
@@ -906,12 +915,15 @@ List<Tupple<String, String>> _distinct(List<Tupple<String, String>> list) {
 class KeyBasket {
   final int firstLetter;
   final int startIndex;
-  final int endIndex;
+  int get endIndex => _endIndex;
+  // _endIndex is set after object create while reading baskets from file which stores on startIndex and endindex is calculated as difference of startIndex of adjacent records
+  // ignore: prefer_final_fields
+  int _endIndex;
 
-  KeyBasket(this.firstLetter, this.startIndex, this.endIndex);
+  KeyBasket(this.firstLetter, this.startIndex, this._endIndex);
 
   String get firstLetterString => String.fromCharCode(firstLetter);
-  int get length => endIndex - startIndex;
+  int get length => _endIndex - startIndex;
 }
 
 class _Triple<T> {

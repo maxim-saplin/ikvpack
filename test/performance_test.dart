@@ -568,7 +568,7 @@ void main() async {
     var quadraBench = _benchmarkSync(quadra);
     singleBench.prnt('Single', true);
     quadraBench.prnt('Quadra', true);
-  });
+  }, skip: true);
 
   test('Ikv.fromMap sync vs async', () async {
     void fromMap() {

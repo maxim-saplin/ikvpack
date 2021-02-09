@@ -192,7 +192,7 @@ void runStorageInvariantTests() {
     expect(await ik['c'], 'ccc');
   });
 
-  test('Same data is read back (w. IkvMap.fromBytes)', () async {
+  test('Data is read correctly (w. IkvMap.fromBytes)', () async {
     var ik = IkvPack.fromBytes(testBytes.buffer.asByteData());
 
     expect(ik.length, 1436);
