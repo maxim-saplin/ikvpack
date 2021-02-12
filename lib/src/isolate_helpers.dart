@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:isolate';
 
+import 'package:meta/meta.dart';
+
 abstract class PooledJob<E> {
   Future<E> job();
 }
@@ -48,7 +50,7 @@ abstract class PooledInstanceWorker {
   late SendPort _sendPort;
   PooledInstanceWorker() : _instanceId = _instanceIdCounter++;
   Future<R> callRemoteMethod<R>(Action action) async {
-    return Future<R>(() => 0 as R);
+    return _sendRequest<R>(action);
   }
 
   Future<R> _sendRequest<R>(Action action) {
@@ -87,14 +89,22 @@ class _InstanceMapEntry {
 
 class IsolatePool {
   final int numberOfIsolates;
-  final List<SendPort?> isolateSendPorts = [];
-  final List<Isolate> isolates = [];
-  final List<bool> isolateBusyWithJob = [];
-  List<_PooledJobInternal> jobs = [];
+  final List<SendPort?> _isolateSendPorts = [];
+  final List<Isolate> _isolates = [];
+  final List<bool> _isolateBusyWithJob = [];
+  List<_PooledJobInternal> _jobs = [];
   int lastJobStarted = 0;
   List<Completer> jobCompleters = [];
 
+  final Completer _started = Completer();
+  // TODO test both when completer is and is not done
+  /// A pool can be started early on upon app launch and checked latter and awaited to if not started yet
+  Future get started => _started.future;
+
   final Map<int, _InstanceMapEntry> _pooledInstances = {};
+
+  int get numberOfPooledInstances => _pooledInstances.length;
+
   //TODO consider adding timeouts
   Map<int, Completer<PooledInstance>> creationCompleters =
       {}; // instanceId is key
@@ -102,15 +112,18 @@ class IsolatePool {
   IsolatePool(this.numberOfIsolates);
 
   Future scheduleJob(PooledJob job) {
-    jobs.add(_PooledJobInternal(job, jobs.length, -1));
+    _jobs.add(_PooledJobInternal(job, _jobs.length, -1));
     var completer = Completer();
     jobCompleters.add(completer);
     _runJobWithVacantIsolate();
     return completer.future;
   }
 
-  Future<PooledInstance> createInstance(
-      PooledInstanceWorker worker, PooledCallbak? callbak) async {
+  // TODO
+  void destroyInstance() {}
+
+  Future<PooledInstance> createInstance(PooledInstanceWorker worker,
+      [PooledCallbak? callbak]) async {
     var pi = PooledInstance._(worker._instanceId, this, callbak);
 
     var min = 10000000;
@@ -131,18 +144,18 @@ class IsolatePool {
     var completer = Completer<PooledInstance>();
     creationCompleters[pi._instanceId] = completer;
 
-    isolateSendPorts[minIndex]!.send(worker);
+    _isolateSendPorts[minIndex]!.send(worker);
 
     return completer.future;
   }
 
   void _runJobWithVacantIsolate() {
-    var availableIsolate = isolateBusyWithJob.indexOf(false);
-    if (availableIsolate > -1 && lastJobStarted < jobs.length) {
-      var job = jobs[lastJobStarted];
+    var availableIsolate = _isolateBusyWithJob.indexOf(false);
+    if (availableIsolate > -1 && lastJobStarted < _jobs.length) {
+      var job = _jobs[lastJobStarted];
       job.isolateIndex = availableIsolate;
-      isolateSendPorts[availableIsolate]!.send(job);
-      isolateBusyWithJob[availableIsolate] = true;
+      _isolateSendPorts[availableIsolate]!.send(job);
+      _isolateBusyWithJob[availableIsolate] = true;
       lastJobStarted++;
     }
   }
@@ -160,8 +173,8 @@ class IsolatePool {
 
     var last = Completer();
     for (var i = 0; i < numberOfIsolates; i++) {
-      isolateBusyWithJob.add(false);
-      isolateSendPorts.add(null);
+      _isolateBusyWithJob.add(false);
+      _isolateSendPorts.add(null);
     }
 
     var spawnSw = Stopwatch();
@@ -178,7 +191,7 @@ class IsolatePool {
           _pooledIsolateBody, params,
           errorsAreFatal: false);
 
-      isolates.add(isolate);
+      _isolates.add(isolate);
 
       receivePort.listen((data) {
         if (data is _CreationResponse) {
@@ -222,18 +235,19 @@ class IsolatePool {
 
   void _processIsolateStartResult(_PooledIsolateParams params, Completer last) {
     _isolatesStarted++;
-    isolateSendPorts[params.isolateIndex] = params.sendPort;
+    _isolateSendPorts[params.isolateIndex] = params.sendPort;
     _avgMicroseconds += params.stopwatch.elapsedMicroseconds;
     if (_isolatesStarted == numberOfIsolates) {
       _avgMicroseconds /= numberOfIsolates;
       print('Avg time to complete starting an isolate is '
           '${_avgMicroseconds} microseconds');
       last.complete();
+      _started.complete();
     }
   }
 
   void _processJobResult(_PooledJobResult result) {
-    isolateBusyWithJob[result.isolateIndex] = false;
+    _isolateBusyWithJob[result.isolateIndex] = false;
     if (result.error == null) {
       jobCompleters[result.jobIndex].complete(result.result);
     } else {
@@ -252,20 +266,20 @@ class IsolatePool {
     }
     var index = pi.isolateIndex;
     var request = _Request(instanceId, action);
-    isolateSendPorts[index]!.send(request);
+    _isolateSendPorts[index]!.send(request);
     var c = Completer<R>();
     _requestCompleters[request.id] = c;
     return c.future;
   }
 
   Future _processRequest(_Request request) async {
-    if (!_workerInstances.containsKey(request.instanceId)) {
+    if (!_pooledInstances.containsKey(request.instanceId)) {
       print(
           'Isolate pool received request to unknown instance ${request.instanceId}');
       return;
     }
     var i = _pooledInstances[request.instanceId]!;
-    if (i.instance.remoteCallback != null) {
+    if (i.instance.remoteCallback == null) {
       print(
           'Isolate pool received request to instance ${request.instanceId} which doesnt have callback intialized');
       return;
@@ -274,15 +288,15 @@ class IsolatePool {
       var result = i.instance.remoteCallback!(request.action);
       var response = _Response(request.id, result, null);
 
-      isolateSendPorts[i.isolateIndex]?.send(response);
+      _isolateSendPorts[i.isolateIndex]?.send(response);
     } catch (e) {
       var response = _Response(request.id, null, e);
-      isolateSendPorts[i.isolateIndex]?.send(response);
+      _isolateSendPorts[i.isolateIndex]?.send(response);
     }
   }
 
   void stop() {
-    for (var i in isolates) {
+    for (var i in _isolates) {
       i.kill();
       for (var c in jobCompleters) {
         if (!c.isCompleted) {

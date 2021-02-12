@@ -1,10 +1,8 @@
-import 'dart:async';
-import 'dart:isolate';
-import 'dart:math';
-
 @TestOn('vm')
+
 import 'package:test/test.dart';
 import 'package:ikvpack/ikvpack.dart';
+import 'dart:async';
 
 class InstanceA {
   int sum(int x, int y) {
@@ -88,71 +86,83 @@ class WorkerA extends PooledInstanceWorker {
 }
 
 late IsolatePool pool;
+late PooledInstance pi;
 
 void main() {
-  setUpAll(() async {
-    pool = IsolatePool(4);
-    await pool.start();
+  test('Creating pooled instance succeeds', () async {
+    var _pool = IsolatePool(4);
+    await _pool.start();
+    var _ = await _pool.createInstance(WorkerA(), null);
+    expect(_pool.numberOfPooledInstances, 1);
   });
 
-  test('Creating pooled instance', () async {
-    var _ = await pool.createInstance(WorkerA(), null);
-    expect(true, true); // no exception happens
+  test('Creating multiple pooled instance succeeds', () async {
+    var _pool = IsolatePool(4);
+    await _pool.start();
+    for (var i = 0; i < 20; i++) {
+      var _ = await _pool.createInstance(WorkerA(), null);
+    }
+    expect(_pool.numberOfPooledInstances, 20);
   });
-
   test('Creating pooled instance with error', () async {
+    var _pool = IsolatePool(4);
+    await _pool.start();
     var s = '';
     try {
-      var _ = await pool.createInstance(WorkerA(true), null);
+      var _ = await _pool.createInstance(WorkerA(true), null);
     } catch (e) {
       s = e.toString();
     }
     expect(s, 'Failed on start');
   });
 
-  test('Simple action returns result', () async {
-    var pi = await pool.createInstance(WorkerA());
-    var res = await pi.callRemoteMethod(SumAction(2, 2));
-    expect(res, 4);
-  });
-
-  test('Call callback from pooled instance', () async {
-    var completer = Completer<int>();
-    var pi = await pool.createInstance(WorkerA(), (a) {
-      completer.complete((a as CallbackAction).x);
-      return a.x + 1;
+  group('WorkerA', () {
+    setUpAll(() async {
+      pool = IsolatePool(4);
+      await pool.start();
+      pi = await pool.createInstance(WorkerA());
     });
-    var _ = await pi.callRemoteMethod(CallbackIssuingAction(1));
-    var res = await completer.future;
-    expect(res, 2);
-    // the callback will be called twice from isolate, each time adding 1 to whatever it receives
-    completer = Completer<int>();
-    res = await completer.future;
-    expect(res, 4);
-  });
 
-  test('Call null callback from pooled instance', () async {
-    var pi = await pool.createInstance(WorkerA());
-    var _ = await pi.callRemoteMethod(CallbackIssuingAction(1));
-    //await Future.delayed(Duration(milliseconds: 10000), () => 0);
-    // checked manualy debug output to see there's message 'Isolate pool received request to instance 0 which doesnt have callback intialized'
-    expect(true, true); // No exceptions
-  });
+    test('Simple action returns result', () async {
+      var res = await pi.callRemoteMethod(SumAction(2, 2));
+      expect(res, 4);
+    });
 
-  test('Async action returns result', () async {
-    var pi = await pool.createInstance(WorkerA());
-    var res = await pi.callRemoteMethod(ConcatAction('Hello ', 'world'));
-    expect(res, 'Hello world');
-  });
+    test('Call callback from pooled instance', () async {
+      var completer = Completer<int>();
+      var pi = await pool.createInstance(WorkerA(), (a) {
+        completer.complete((a as CallbackAction).x);
+        return a.x + 1;
+      });
+      var _ = await pi.callRemoteMethod(CallbackIssuingAction(1));
+      var res = await completer.future;
+      expect(res, 2);
+      // the callback will be called twice from isolate, each time adding 1 to whatever it receives
+      completer = Completer<int>();
+      res = await completer.future;
+      expect(res, 4);
+    });
 
-  test('Failed action returns error', () async {
-    var s = '';
-    try {
-      var pi = await pool.createInstance(WorkerA(false));
-      await pi.callRemoteMethod(FailAction());
-    } catch (e) {
-      s = e.toString();
-    }
-    expect(s, 'Action failed');
+    test('Call null callback from pooled instance', () async {
+      var _ = await pi.callRemoteMethod(CallbackIssuingAction(1));
+      //await Future.delayed(Duration(milliseconds: 10000), () => 0);
+      // checked manualy debug output to see there's message 'Isolate pool received request to instance 0 which doesnt have callback intialized'
+      expect(true, true); // No exceptions
+    });
+
+    test('Async action returns result', () async {
+      var res = await pi.callRemoteMethod(ConcatAction('Hello ', 'world'));
+      expect(res, 'Hello world');
+    });
+
+    test('Failed action returns error', () async {
+      var s = '';
+      try {
+        await pi.callRemoteMethod(FailAction());
+      } catch (e) {
+        s = e.toString();
+      }
+      expect(s, 'Action failed');
+    });
   });
 }
