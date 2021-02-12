@@ -129,8 +129,9 @@ class IsolatePool {
     _pooledInstances[pi._instanceId] = _InstanceMapEntry(pi, minIndex);
 
     var completer = Completer<PooledInstance>();
-
     creationCompleters[pi._instanceId] = completer;
+
+    isolateSendPorts[minIndex]!.send(worker);
 
     return completer.future;
   }
@@ -180,23 +181,16 @@ class IsolatePool {
       isolates.add(isolate);
 
       receivePort.listen((data) {
-        switch (data.runtimeType) {
-          case _CreationResponse:
-            _processCreationResponse(data as _CreationResponse);
-            break;
-          case _Request:
-            _processRequest(data as _Request);
-            break;
-          case _Response:
-            _processResponse(data as _Response);
-            break;
-          case _PooledIsolateParams:
-            _processIsolateStartResult(
-                _isolatesStarted as _PooledIsolateParams, last);
-            break;
-          case _PooledJobResult:
-            _processJobResult(data as _PooledJobResult);
-            break;
+        if (data is _CreationResponse) {
+          _processCreationResponse(data);
+        } else if (data is _Request) {
+          _processRequest(data);
+        } else if (data is _Response) {
+          _processResponse(data);
+        } else if (data is _PooledIsolateParams) {
+          _processIsolateStartResult(data, last);
+        } else if (data is _PooledJobResult) {
+          _processJobResult(data);
         }
       });
     }
@@ -219,7 +213,7 @@ class IsolatePool {
         creationCompleters.remove(r._instanceId);
         _pooledInstances.remove(r._instanceId);
       } else {
-        c.complete();
+        c.complete(_pooledInstances[r._instanceId]!.instance);
         creationCompleters.remove(r._instanceId);
         _pooledInstances[r._instanceId]!.state = _PooledInstanceStatus.started;
       }
@@ -348,72 +342,64 @@ void _pooledIsolateBody(_PooledIsolateParams params) async {
       (params.isolateIndex +
           1); // split counters into ranges to deal with overlaps between isolates. Theoretically after one billion requests a collision might happen
   isolatePort.listen((message) async {
-    switch (message.runtimeType) {
-      case _Request:
-        var req = message as _Request;
-        if (!_workerInstances.containsKey(req.instanceId)) {
-          print(
-              'Isolate ${params.isolateIndex} received request to unknown instance ${req.instanceId}');
-          break;
-        }
-        var i = _workerInstances[req.instanceId]!;
-        try {
-          // TODO, check sending 2nd request before the 1st completes
-          var result = await i.receiveRemoteCall(req.action);
-          var response = _Response(req.id, result, null);
-          params.sendPort.send(response);
-        } catch (e) {
-          var response = _Response(req.id, null, e);
-          params.sendPort.send(response);
-        }
-        break;
-      case _Response:
-        var res = message as _Response;
-        if (!_requestCompleters.containsKey(res.requestId)) {
-          print(
-              'Isolate ${params.isolateIndex} received response to unknown request ${res.requestId}');
-          break;
-        }
+    if (message is _Request) {
+      var req = message;
+      if (!_workerInstances.containsKey(req.instanceId)) {
+        print(
+            'Isolate ${params.isolateIndex} received request to unknown instance ${req.instanceId}');
+        return;
+      }
+      var i = _workerInstances[req.instanceId]!;
+      try {
+        // TODO, check sending 2nd request before the 1st completes
+        var result = await i.receiveRemoteCall(req.action);
+        var response = _Response(req.id, result, null);
+        params.sendPort.send(response);
+      } catch (e) {
+        var response = _Response(req.id, null, e);
+        params.sendPort.send(response);
+      }
+    } else if (message is _Response) {
+      var res = message;
+      if (!_requestCompleters.containsKey(res.requestId)) {
+        print(
+            'Isolate ${params.isolateIndex} received response to unknown request ${res.requestId}');
+        return;
+      }
+      _processResponse(res);
+    } else if (message is PooledInstanceWorker) {
+      try {
+        // TODO check error is propagated if instance fails to be created
+        var pw = message;
+        await pw.createInstance();
+        pw._sendPort = params.sendPort;
+        _workerInstances[message._instanceId] = message;
+        var success = _CreationResponse(message._instanceId, null);
+        params.sendPort.send(success);
+      } catch (e) {
+        var error = _CreationResponse(message._instanceId, e);
+        params.sendPort.send(error);
+      }
+    } else if (message is _PooledJobInternal) {
+      try {
+        // params.stopwatch.reset();
+        // params.stopwatch.start();
+        //print('Job index ${message.jobIndex}');
 
-        _processResponse(res);
-
-        break;
-      case PooledInstanceWorker:
-        try {
-          // TODO check error is propagated if instance fails to be created
-          var pw = message as PooledInstanceWorker;
-          await pw.createInstance();
-          pw._sendPort = params.sendPort;
-          _workerInstances[message._instanceId] = message;
-          var success = _CreationResponse(message._instanceId, null);
-          params.sendPort.send(success);
-        } catch (e) {
-          var error = _CreationResponse(message._instanceId, e);
-          params.sendPort.send(error);
-        }
-        break;
-      case _PooledJobInternal:
-        try {
-          // params.stopwatch.reset();
-          // params.stopwatch.start();
-          //print('Job index ${message.jobIndex}');
-
-          var result = await message.job.job();
-          // params.stopwatch.stop();
-          // print('Job done in ${params.stopwatch.elapsedMilliseconds} ms');
-          // params.stopwatch.reset();
-          // params.stopwatch.start();
-          params.sendPort.send(
-              _PooledJobResult(result, message.jobIndex, message.isolateIndex));
-          // params.stopwatch.stop();
-          // print('Job result sent in ${params.stopwatch.elapsedMilliseconds} ms');
-        } catch (e) {
-          var r =
-              _PooledJobResult(null, message.jobIndex, message.isolateIndex);
-          r.error = e;
-          params.sendPort.send(r);
-        }
-        break;
+        var result = await message.job.job();
+        // params.stopwatch.stop();
+        // print('Job done in ${params.stopwatch.elapsedMilliseconds} ms');
+        // params.stopwatch.reset();
+        // params.stopwatch.start();
+        params.sendPort.send(
+            _PooledJobResult(result, message.jobIndex, message.isolateIndex));
+        // params.stopwatch.stop();
+        // print('Job result sent in ${params.stopwatch.elapsedMilliseconds} ms');
+      } catch (e) {
+        var r = _PooledJobResult(null, message.jobIndex, message.isolateIndex);
+        r.error = e;
+        params.sendPort.send(r);
+      }
     }
   });
 }
