@@ -11,7 +11,7 @@ abstract class PooledJob<E> {
 int _reuestIdCounter = 0;
 // instances are scoped to pools
 int _instanceIdCounter = 0;
-//TODO consider adding timeouts
+//TODO consider adding timeouts, check fulfilled requests are deleted
 Map<int, Completer> _requestCompleters = {}; // requestId is key
 
 abstract class Action {} // holder of action type and payload
@@ -77,6 +77,11 @@ class _CreationResponse {
   _CreationResponse(this._instanceId, this.error);
 }
 
+class _DestroyRequest {
+  final int _instanceId;
+  _DestroyRequest(this._instanceId);
+}
+
 enum _PooledInstanceStatus { starting, started }
 
 class _InstanceMapEntry {
@@ -87,23 +92,30 @@ class _InstanceMapEntry {
   _InstanceMapEntry(this.instance, this.isolateIndex);
 }
 
+enum IsolatePoolState { notStarted, started, stoped }
+
 class IsolatePool {
   final int numberOfIsolates;
   final List<SendPort?> _isolateSendPorts = [];
   final List<Isolate> _isolates = [];
   final List<bool> _isolateBusyWithJob = [];
-  List<_PooledJobInternal> _jobs = [];
+  final List<_PooledJobInternal> _jobs = [];
   int lastJobStarted = 0;
   List<Completer> jobCompleters = [];
 
+  IsolatePoolState _state = IsolatePoolState.notStarted;
+
+  IsolatePoolState get state => _state;
+
   final Completer _started = Completer();
-  // TODO test both when completer is and is not done
+
   /// A pool can be started early on upon app launch and checked latter and awaited to if not started yet
   Future get started => _started.future;
 
   final Map<int, _InstanceMapEntry> _pooledInstances = {};
 
   int get numberOfPooledInstances => _pooledInstances.length;
+  int get numberOfPendingRequests => _requestCompleters.length;
 
   //TODO consider adding timeouts
   Map<int, Completer<PooledInstance>> creationCompleters =
@@ -119,8 +131,15 @@ class IsolatePool {
     return completer.future;
   }
 
-  // TODO
-  void destroyInstance() {}
+  void destroyInstance(PooledInstance instance) {
+    if (!_pooledInstances.containsKey(instance._instanceId)) {
+      throw 'Cant find instance with id ${instance._instanceId} among active to destroy it';
+    }
+    var pim = _pooledInstances[instance._instanceId]!;
+    _isolateSendPorts[pim.isolateIndex]!
+        .send(_DestroyRequest(instance._instanceId));
+    _pooledInstances.remove(instance._instanceId);
+  }
 
   Future<PooledInstance> createInstance(PooledInstanceWorker worker,
       [PooledCallbak? callbak]) async {
@@ -243,6 +262,7 @@ class IsolatePool {
           '${_avgMicroseconds} microseconds');
       last.complete();
       _started.complete();
+      _state = IsolatePoolState.started;
     }
   }
 
@@ -260,11 +280,11 @@ class IsolatePool {
     if (!_pooledInstances.containsKey(instanceId)) {
       throw 'Cant send request to non-existing instance, instanceId ${instanceId}';
     }
-    var pi = _pooledInstances[instanceId]!;
-    if (pi.state == _PooledInstanceStatus.starting) {
+    var pim = _pooledInstances[instanceId]!;
+    if (pim.state == _PooledInstanceStatus.starting) {
       throw 'Cant send request to instance in Starting state, instanceId ${instanceId}';
     }
-    var index = pi.isolateIndex;
+    var index = pim.isolateIndex;
     var request = _Request(instanceId, action);
     _isolateSendPorts[index]!.send(request);
     var c = Completer<R>();
@@ -295,6 +315,7 @@ class IsolatePool {
     }
   }
 
+  // TODO, add test exceptions are thrown
   void stop() {
     for (var i in _isolates) {
       i.kill();
@@ -303,7 +324,21 @@ class IsolatePool {
           c.completeError('Isolate pool stopped upon request, canceling jobs');
         }
       }
+      for (var c in creationCompleters.values) {
+        if (!c.isCompleted) {
+          c.completeError(
+              'Isolate pool stopped upon request, canceling instance creation request');
+        }
+      }
+      for (var c in _requestCompleters.values) {
+        if (!c.isCompleted) {
+          c.completeError(
+              'Isolate pool stopped upon request, canceling pending request');
+        }
+      }
     }
+
+    _state = IsolatePoolState.stoped;
   }
 }
 
@@ -317,6 +352,7 @@ void _processResponse(_Response response) {
   } else {
     c.complete(response.result);
   }
+  _requestCompleters.remove(response.requestId);
 }
 
 class _PooledIsolateParams<E> {
@@ -394,6 +430,13 @@ void _pooledIsolateBody(_PooledIsolateParams params) async {
         var error = _CreationResponse(message._instanceId, e);
         params.sendPort.send(error);
       }
+    } else if (message is _DestroyRequest) {
+      if (!_workerInstances.containsKey(message._instanceId)) {
+        print(
+            'Isolate ${params.isolateIndex} received destroy request of unknown instance ${message._instanceId}');
+        return;
+      }
+      _workerInstances.remove(message._instanceId);
     } else if (message is _PooledJobInternal) {
       try {
         // params.stopwatch.reset();

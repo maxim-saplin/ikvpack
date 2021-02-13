@@ -90,9 +90,30 @@ void main() {
 
     test('Spawned pool isolates are killed', () async {
       var p = IsolatePool(8);
+      expect(p.state, IsolatePoolState.notStarted);
       await p.start();
+      expect(p.state, IsolatePoolState.started);
+      //For no better option to check that isolates a actually killed it's worth seting a breakpoint here and then cheking in Debug/Call Stack (VSCode) that before stop() there're running isolates and they disappear after stop()
       p.stop();
-      // no exceptions, no test timeout
+      expect(p.state, IsolatePoolState.stoped);
+    }, timeout: Timeout(Duration(seconds: 5)));
+
+    test('Awaiting "start" completer', () async {
+      var p = IsolatePool(8);
+      p.start();
+      expect(p.state, IsolatePoolState.notStarted);
+      await p.started;
+      expect(p.state, IsolatePoolState.started);
+      p.stop();
+    }, timeout: Timeout(Duration(seconds: 5)));
+
+    test('Awaiting completed "start" completer', () async {
+      var p = IsolatePool(8);
+      await p.start();
+      expect(p.state, IsolatePoolState.started);
+      await p.started;
+      expect(p.state, IsolatePoolState.started);
+      p.stop();
     }, timeout: Timeout(Duration(seconds: 5)));
 
     test('Runing simple job in the pool', () async {

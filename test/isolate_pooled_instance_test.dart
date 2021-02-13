@@ -104,6 +104,31 @@ void main() {
     }
     expect(_pool.numberOfPooledInstances, 20);
   });
+
+  test('Can destroy pooled instances', () async {
+    var _pool = IsolatePool(4);
+    await _pool.start();
+    var instances = <PooledInstance>[];
+    for (var i = 0; i < 5; i++) {
+      var pi = await _pool.createInstance(WorkerA(), null);
+      instances.add(pi);
+    }
+    expect(_pool.numberOfPooledInstances, 5);
+
+    _pool.destroyInstance(instances[0]);
+    expect(_pool.numberOfPooledInstances, 4);
+
+    var err = '';
+
+    try {
+      _pool.destroyInstance(instances[0]);
+    } catch (e) {
+      err = e.toString();
+    }
+
+    expect(err != '', true);
+  });
+
   test('Creating pooled instance with error', () async {
     var _pool = IsolatePool(4);
     await _pool.start();
@@ -153,6 +178,15 @@ void main() {
     test('Async action returns result', () async {
       var res = await pi.callRemoteMethod(ConcatAction('Hello ', 'world'));
       expect(res, 'Hello world');
+    });
+
+    test('Reqeusts number grows and declines', () async {
+      var r1 = pi.callRemoteMethod(ConcatAction('Hello ', 'world'));
+      expect(pool.numberOfPendingRequests, 1);
+      var r2 = pi.callRemoteMethod(ConcatAction('Hello ', 'world'));
+      expect(pool.numberOfPendingRequests, 2);
+      await Future.wait([r1, r2]);
+      expect(pool.numberOfPendingRequests, 0);
     });
 
     test('Failed action returns error', () async {
