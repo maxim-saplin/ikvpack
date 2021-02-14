@@ -122,7 +122,7 @@ class IsolatePool {
   }
 
   //TODO consider adding timeouts
-  Map<int, Completer> _requestCompleters = {}; // requestId is key
+  final Map<int, Completer> _requestCompleters = {}; // requestId is key
   Map<int, Completer<PooledInstance>> creationCompleters =
       {}; // instanceId is key
 
@@ -410,7 +410,6 @@ void _pooledIsolateBody(_PooledIsolateParams params) async {
       }
       var i = _workerInstances[req.instanceId]!;
       try {
-        // TODO, check sending 2nd request before the 1st completes
         var result = await i.receiveRemoteCall(req.action);
         var response = _Response(req.id, result, null);
         params.sendPort.send(response);
@@ -428,7 +427,6 @@ void _pooledIsolateBody(_PooledIsolateParams params) async {
       _processResponse(res);
     } else if (message is PooledInstanceWorker) {
       try {
-        // TODO check error is propagated if instance fails to be created
         var pw = message;
         await pw.init();
         pw._sendPort = params.sendPort;

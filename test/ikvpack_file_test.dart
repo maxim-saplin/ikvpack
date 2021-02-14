@@ -129,7 +129,12 @@ void main() async {
         res[i].dispose();
         IkvPack.delete('tmp/test_isol${i}.dat');
       }
-    }, timeout: Timeout(Duration(seconds: 120)));
+    }, timeout: Timeout(Duration(seconds: 10)), onPlatform: {
+      'windows': [
+        Skip(
+            'Odd behavior on Windows, files created in this test remain locked with some process')
+      ]
+    });
 
     test('Files size is properly returned', () async {
       expect((await IkvPack.load('test/testIkv.dat')).sizeBytes, 269324);

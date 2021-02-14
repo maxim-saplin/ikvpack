@@ -328,6 +328,15 @@ void main() {
       }
       expect(s, 'Action failed');
     });
+
+    test('Sending second request before the first completes', () async {
+      var f1 = pia.callRemoteMethod(CallbackIssuingAction(1));
+      var f2 = pia.callRemoteMethod(SumIntAction(1, 1));
+
+      var _ = await f1;
+      var x2 = await f2;
+      expect(x2, 1.0 + 1.0);
+    });
   });
 
   group('WorkerB', () {
@@ -371,6 +380,15 @@ void main() {
         s = e.toString();
       }
       expect(s, 'SumDynamic supports only int and double');
+    });
+
+    test('Sending second request before the first completes', () async {
+      var f1 = pib.callRemoteMethod(SumIntAction(1, 1));
+      var f2 = pib.callRemoteMethod(SumDynamicAction(1.0, 1.0));
+      var x1 = await f1;
+      var x2 = await f2;
+      expect(x1, 2);
+      expect(x2, 1.0 + 1.0);
     });
   });
 }
