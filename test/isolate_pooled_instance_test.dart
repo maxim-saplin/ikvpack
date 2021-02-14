@@ -28,10 +28,22 @@ class InstanceA {
   }
 }
 
-class SumAction extends Action {
+class InstanceB {
+  double sum(double x, double y) {
+    return x + y;
+  }
+}
+
+class SumIntAction extends Action {
   final int x;
   final int y;
-  SumAction(this.x, this.y);
+  SumIntAction(this.x, this.y);
+}
+
+class SumDynamicAction extends Action {
+  final dynamic x;
+  final dynamic y;
+  SumDynamicAction(this.x, this.y);
 }
 
 class ConcatAction extends Action {
@@ -59,7 +71,7 @@ class WorkerA extends PooledInstanceWorker {
   WorkerA([this.faileOnStart = false]);
 
   @override
-  Future createInstance() async {
+  Future init() async {
     if (faileOnStart) throw 'Failed on start';
     _a = InstanceA();
   }
@@ -67,8 +79,8 @@ class WorkerA extends PooledInstanceWorker {
   @override
   Future receiveRemoteCall(Action action) async {
     switch (action.runtimeType) {
-      case SumAction:
-        var ac = action as SumAction;
+      case SumIntAction:
+        var ac = action as SumIntAction;
         return _a.sum(ac.x, ac.y);
       case ConcatAction:
         var ac = action as ConcatAction;
@@ -85,8 +97,36 @@ class WorkerA extends PooledInstanceWorker {
   }
 }
 
-late IsolatePool pool;
-late PooledInstance pi;
+class WorkerB extends PooledInstanceWorker {
+  late InstanceA _a;
+  late InstanceB _b;
+
+  @override
+  Future init() async {
+    _a = InstanceA();
+    _b = InstanceB();
+  }
+
+  @override
+  Future receiveRemoteCall(Action action) async {
+    switch (action.runtimeType) {
+      case SumIntAction:
+        var ac = action as SumIntAction;
+        return _a.sum(ac.x, ac.y);
+      case SumDynamicAction:
+        var ac = action as SumDynamicAction;
+        if (ac.x is int) return _a.sum(ac.x, ac.y);
+        if (ac.x is double) return _b.sum(ac.x, ac.y);
+        throw 'SumDynamic supports only int and double';
+      default:
+        throw 'Unknown action recevied';
+    }
+  }
+}
+
+late IsolatePool gPool;
+late PooledInstance pia;
+late PooledInstance pib;
 
 void main() {
   test('Creating pooled instance succeeds', () async {
@@ -103,6 +143,38 @@ void main() {
       var _ = await _pool.createInstance(WorkerA(), null);
     }
     expect(_pool.numberOfPooledInstances, 20);
+  });
+
+  test('Creating different type pooled instance succeeds', () async {
+    var _pool = IsolatePool(4);
+    await _pool.start();
+    for (var i = 0; i < 20; i++) {
+      var _ =
+          await _pool.createInstance(i % 2 == 0 ? WorkerA() : WorkerB(), null);
+    }
+    expect(_pool.numberOfPooledInstances, 20);
+  });
+
+  test('Instances are created in different isolates', () async {
+    var _pool = IsolatePool(4);
+    await _pool.start();
+    var instances = <PooledInstance>[];
+    for (var i = 0; i < 20; i++) {
+      var pi =
+          await _pool.createInstance(i % 2 == 0 ? WorkerA() : WorkerB(), null);
+      instances.add(pi);
+    }
+    expect(_pool.numberOfPooledInstances, 20);
+
+    var pools = List<int>.filled(4, 0);
+
+    for (var pi in instances) {
+      pools[_pool.indexOfPi(pi)]++;
+    }
+
+    for (var p in pools) {
+      expect(p, 5);
+    }
   });
 
   test('Can destroy pooled instances', () async {
@@ -129,6 +201,60 @@ void main() {
     expect(err != '', true);
   });
 
+  test('Can stop while there\'re instances being created', () async {
+    var _pool = IsolatePool(5);
+    await _pool.start();
+
+    late Future f;
+    var err = '';
+
+    try {
+      for (var i = 0; i < 25; i++) {
+        f = _pool.createInstance(WorkerA(), null);
+        if (i < 24) await f;
+      }
+      //expect(_pool.numberOfPooledInstances, 0);
+
+      _pool.stop();
+      await f;
+    } catch (e) {
+      err = e.toString();
+    }
+
+    expect(err,
+        'Isolate pool stopped upon request, cancelling instance creation requests');
+  });
+
+  test('Can stop while there\'re requests pending', () async {
+    var _pool = IsolatePool(5);
+    await _pool.start();
+
+    late Future f;
+    late PooledInstance pi;
+    var err = '';
+
+    try {
+      for (var i = 0; i < 25; i++) {
+        pi = await _pool.createInstance(WorkerA(), null);
+      }
+
+      expect(_pool.numberOfPooledInstances, 25);
+
+      for (var i = 0; i < 25; i++) {
+        f = pi.callRemoteMethod<int>(SumIntAction(i, 1));
+        if (i < 24) await f;
+      }
+
+      _pool.stop();
+      await f;
+    } catch (e) {
+      err = e.toString();
+    }
+
+    expect(
+        err, 'Isolate pool stopped upon request, cancelling pending request');
+  });
+
   test('Creating pooled instance with error', () async {
     var _pool = IsolatePool(4);
     await _pool.start();
@@ -143,19 +269,23 @@ void main() {
 
   group('WorkerA', () {
     setUpAll(() async {
-      pool = IsolatePool(4);
-      await pool.start();
-      pi = await pool.createInstance(WorkerA());
+      gPool = IsolatePool(4);
+      await gPool.start();
+      pia = await gPool.createInstance(WorkerA());
+    });
+
+    tearDownAll(() {
+      gPool.stop();
     });
 
     test('Simple action returns result', () async {
-      var res = await pi.callRemoteMethod(SumAction(2, 2));
+      var res = await pia.callRemoteMethod(SumIntAction(2, 2));
       expect(res, 4);
     });
 
     test('Call callback from pooled instance', () async {
       var completer = Completer<int>();
-      var pi = await pool.createInstance(WorkerA(), (a) {
+      var pi = await gPool.createInstance(WorkerA(), (a) {
         completer.complete((a as CallbackAction).x);
         return a.x + 1;
       });
@@ -169,34 +299,78 @@ void main() {
     });
 
     test('Call null callback from pooled instance', () async {
-      var _ = await pi.callRemoteMethod(CallbackIssuingAction(1));
+      var _ = await pia.callRemoteMethod(CallbackIssuingAction(1));
       //await Future.delayed(Duration(milliseconds: 10000), () => 0);
       // checked manualy debug output to see there's message 'Isolate pool received request to instance 0 which doesnt have callback intialized'
       expect(true, true); // No exceptions
     });
 
     test('Async action returns result', () async {
-      var res = await pi.callRemoteMethod(ConcatAction('Hello ', 'world'));
+      var res = await pia.callRemoteMethod(ConcatAction('Hello ', 'world'));
       expect(res, 'Hello world');
     });
 
     test('Reqeusts number grows and declines', () async {
-      var r1 = pi.callRemoteMethod(ConcatAction('Hello ', 'world'));
-      expect(pool.numberOfPendingRequests, 1);
-      var r2 = pi.callRemoteMethod(ConcatAction('Hello ', 'world'));
-      expect(pool.numberOfPendingRequests, 2);
+      var r1 = pia.callRemoteMethod(ConcatAction('Hello ', 'world'));
+      expect(gPool.numberOfPendingRequests, 1);
+      var r2 = pia.callRemoteMethod(ConcatAction('Hello ', 'world'));
+      expect(gPool.numberOfPendingRequests, 2);
       await Future.wait([r1, r2]);
-      expect(pool.numberOfPendingRequests, 0);
+      expect(gPool.numberOfPendingRequests, 0);
     });
 
     test('Failed action returns error', () async {
       var s = '';
       try {
-        await pi.callRemoteMethod(FailAction());
+        await pia.callRemoteMethod(FailAction());
       } catch (e) {
         s = e.toString();
       }
       expect(s, 'Action failed');
+    });
+  });
+
+  group('WorkerB', () {
+    setUpAll(() async {
+      gPool = IsolatePool(4);
+      await gPool.start();
+      pia = await gPool.createInstance(WorkerA());
+      pib = await gPool.createInstance(WorkerB());
+    });
+
+    tearDownAll(() {
+      gPool.stop();
+    });
+
+    test('Simple action returns result', () async {
+      var i = await pib.callRemoteMethod<int>(SumIntAction(2, 2));
+      expect(i, 4);
+      i = await pib.callRemoteMethod<int>(SumDynamicAction(1, 2));
+      expect(i, 3);
+      var d = await pib.callRemoteMethod<double>(SumDynamicAction(10.5, 10.5));
+      expect(d, 10.5 + 10.5);
+    });
+
+    test('Calling unknown action when wroker is supposed to throw', () async {
+      var s = '';
+      try {
+        await pib.callRemoteMethod(ConcatAction('', ''));
+      } catch (e) {
+        s = e.toString();
+      }
+      expect(s, 'Unknown action recevied');
+    });
+
+    test(
+        'Calling action with unexpected params when wroker is supposed to throw',
+        () async {
+      var s = '';
+      try {
+        var _ = await pib.callRemoteMethod<int>(SumDynamicAction('', ''));
+      } catch (e) {
+        s = e.toString();
+      }
+      expect(s, 'SumDynamic supports only int and double');
     });
   });
 }

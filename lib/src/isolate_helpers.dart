@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'dart:isolate';
 
-import 'package:meta/meta.dart';
-
 abstract class PooledJob<E> {
   Future<E> job();
 }
@@ -12,7 +10,7 @@ int _reuestIdCounter = 0;
 // instances are scoped to pools
 int _instanceIdCounter = 0;
 //TODO consider adding timeouts, check fulfilled requests are deleted
-Map<int, Completer> _requestCompleters = {}; // requestId is key
+Map<int, Completer> _isolateRequestCompleters = {}; // requestId is key
 
 abstract class Action {} // holder of action type and payload
 
@@ -57,12 +55,12 @@ abstract class PooledInstanceWorker {
     var request = _Request(_instanceId, action);
     _sendPort.send(request);
     var c = Completer<R>();
-    _requestCompleters[request.id] = c;
+    _isolateRequestCompleters[request.id] = c;
     return c.future;
   }
 
   /// This method is called in isolate whenever a pool receives a request to create a pooled instance
-  Future createInstance();
+  Future init();
 
   /// Overide this method to respond to actions
   Future<dynamic> receiveRemoteCall(Action action);
@@ -117,7 +115,14 @@ class IsolatePool {
   int get numberOfPooledInstances => _pooledInstances.length;
   int get numberOfPendingRequests => _requestCompleters.length;
 
+  /// Returns the number of isolate the Pooled Instance lives in, -1 if instance is not found
+  int indexOfPi(PooledInstance instance) {
+    if (!_pooledInstances.containsKey(instance._instanceId)) return -1;
+    return _pooledInstances[instance._instanceId]!.isolateIndex;
+  }
+
   //TODO consider adding timeouts
+  Map<int, Completer> _requestCompleters = {}; // requestId is key
   Map<int, Completer<PooledInstance>> creationCompleters =
       {}; // instanceId is key
 
@@ -132,12 +137,12 @@ class IsolatePool {
   }
 
   void destroyInstance(PooledInstance instance) {
-    if (!_pooledInstances.containsKey(instance._instanceId)) {
+    var index = indexOfPi(instance);
+    if (index == -1) {
       throw 'Cant find instance with id ${instance._instanceId} among active to destroy it';
     }
-    var pim = _pooledInstances[instance._instanceId]!;
-    _isolateSendPorts[pim.isolateIndex]!
-        .send(_DestroyRequest(instance._instanceId));
+
+    _isolateSendPorts[index]!.send(_DestroyRequest(instance._instanceId));
     _pooledInstances.remove(instance._instanceId);
   }
 
@@ -218,7 +223,7 @@ class IsolatePool {
         } else if (data is _Request) {
           _processRequest(data);
         } else if (data is _Response) {
-          _processResponse(data);
+          _processResponse(data, _requestCompleters);
         } else if (data is _PooledIsolateParams) {
           _processIsolateStartResult(data, last);
         } else if (data is _PooledJobResult) {
@@ -315,44 +320,48 @@ class IsolatePool {
     }
   }
 
-  // TODO, add test exceptions are thrown
+  // TODO - deal with cases when calling methods on stopped instance
   void stop() {
     for (var i in _isolates) {
       i.kill();
       for (var c in jobCompleters) {
         if (!c.isCompleted) {
-          c.completeError('Isolate pool stopped upon request, canceling jobs');
+          c.completeError('Isolate pool stopped upon request, cancelling jobs');
         }
       }
       for (var c in creationCompleters.values) {
         if (!c.isCompleted) {
           c.completeError(
-              'Isolate pool stopped upon request, canceling instance creation request');
+              'Isolate pool stopped upon request, cancelling instance creation requests');
         }
       }
+      creationCompleters.clear();
       for (var c in _requestCompleters.values) {
         if (!c.isCompleted) {
           c.completeError(
-              'Isolate pool stopped upon request, canceling pending request');
+              'Isolate pool stopped upon request, cancelling pending request');
         }
       }
+      _requestCompleters.clear();
     }
 
     _state = IsolatePoolState.stoped;
   }
 }
 
-void _processResponse(_Response response) {
-  if (!_requestCompleters.containsKey(response.requestId)) {
+void _processResponse(_Response response,
+    [Map<int, Completer>? requestCompleters]) {
+  var cc = requestCompleters ?? _isolateRequestCompleters;
+  if (!cc.containsKey(response.requestId)) {
     throw 'Responnse to non-existing request (id ${response.requestId}) recevied';
   }
-  var c = _requestCompleters[response.requestId]!;
+  var c = cc[response.requestId]!;
   if (response.error != null) {
     c.completeError(response.error);
   } else {
     c.complete(response.result);
   }
-  _requestCompleters.remove(response.requestId);
+  cc.remove(response.requestId);
 }
 
 class _PooledIsolateParams<E> {
@@ -411,7 +420,7 @@ void _pooledIsolateBody(_PooledIsolateParams params) async {
       }
     } else if (message is _Response) {
       var res = message;
-      if (!_requestCompleters.containsKey(res.requestId)) {
+      if (!_isolateRequestCompleters.containsKey(res.requestId)) {
         print(
             'Isolate ${params.isolateIndex} received response to unknown request ${res.requestId}');
         return;
@@ -421,7 +430,7 @@ void _pooledIsolateBody(_PooledIsolateParams params) async {
       try {
         // TODO check error is propagated if instance fails to be created
         var pw = message;
-        await pw.createInstance();
+        await pw.init();
         pw._sendPort = params.sendPort;
         _workerInstances[message._instanceId] = message;
         var success = _CreationResponse(message._instanceId, null);

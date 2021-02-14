@@ -7,7 +7,7 @@ import 'package:ikvpack/src/isolate_helpers.dart';
 import 'package:test/test.dart';
 
 import 'shared.dart';
-import 'testMap.dart';
+//import 'testMap.dart';
 
 void main() async {
   // Used to generate test data
@@ -30,6 +30,11 @@ void main() async {
 
     File('test/testBytes.dart').writeAsString(sb.toString());
   }
+
+  tearDownAll(() {
+    var tmpDir = Directory('tmp');
+    if (tmpDir.existsSync()) tmpDir.deleteSync(recursive: true);
+  });
 
   group('File tests, case-insensitive', () {
     //saveTestMapBytes();
@@ -100,24 +105,29 @@ void main() async {
     test('IkvPacks can be loaded in isolate pool', () async {
       var pool = IsolatePool(4);
       await pool.start();
+
       var m = <String, String>{'a': 'aaa', 'b': 'bbb', 'c': 'ccc'};
 
       for (var i = 0; i < 20; i++) {
         var ik = IkvPack.fromMap(m);
-        await ik.saveTo('tmp/test${i}.dat');
+        await ik.saveTo('tmp/test_isol${i}.dat');
       }
 
       var futures = <Future<IkvPack>>[];
 
       for (var i = 0; i < 20; i++) {
-        futures.add(IkvPack.loadInIsolatePool(pool, 'tmp/test${i}.dat'));
+        futures.add(IkvPack.loadInIsolatePool(pool, 'tmp/test_isol${i}.dat'));
       }
 
       var res = await Future.wait(futures);
+      pool.stop();
 
+      // Odd behavior on Windows, files created in this test remain locked with some process
       for (var i = 0; i < 20; i++) {
         expect(res[i].length, 3);
         expect(await res[i]['c'], 'ccc');
+        res[i].dispose();
+        IkvPack.delete('tmp/test_isol${i}.dat');
       }
     }, timeout: Timeout(Duration(seconds: 120)));
 

@@ -125,8 +125,6 @@ class IkvPack {
     return completer.future;
   }
 
-  // TODO, split PooledJob result into smaller portions, i.e. user Streams, and return
-  // multiple keys lists, e.g. one per basket, to ensure there's no junk in main thread
   /// !Warning! Isolate pool needs to be maually started before using this method
   /// and stoped when not needed anymore
   static Future<IkvPack> loadInIsolatePool(IsolatePool pool, String path,

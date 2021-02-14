@@ -100,6 +100,7 @@ void main() {
 
     test('Awaiting "start" completer', () async {
       var p = IsolatePool(8);
+      // ignore: unawaited_futures
       p.start();
       expect(p.state, IsolatePoolState.notStarted);
       await p.started;
@@ -145,7 +146,7 @@ void main() {
         p.stop();
         print(await Future.wait(futures));
       } catch (e) {
-        if (e == 'Isolate pool stopped upon request, canceling jobs') {
+        if (e == 'Isolate pool stopped upon request, cancelling jobs') {
           thrown = true;
         }
       }
