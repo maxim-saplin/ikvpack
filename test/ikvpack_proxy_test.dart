@@ -7,20 +7,67 @@ import 'package:test/test.dart';
 import 'shared.dart';
 
 void main() async {
-  setUpAll(() async {
-    var pool = IsolatePool(4);
-    await pool.start();
-    var ikv = await IkvPackProxy.loadInIsolatePoolAndUseProxy(
-        pool, 'test/testIkv.dat');
-    setIkv(ikv);
-  });
+  late IsolatePool pool;
+  group('File tests', () {
+    setUpAll(() async {
+      pool = IsolatePool(4);
+      await pool.start();
+      var ikv = await IkvPackProxy.loadInIsolatePoolAndUseProxy(
+          pool, 'test/testIkv.dat');
+      setIkv(ikv);
+    });
 
-  test('Getting range works', () async {
-    var range = await ikv.getRange(1, 11);
-    expect(range.length, 11);
-    var x = range.entries.first;
-    expect(x.key, 'Aaron Burr');
-    expect(x.value,
-        '<div><i>noun</i></div><div>United States politician who served as vice president under Jefferson; he mortally wounded his political rival Alexander Hamilton in a duel and fled south <i>(1756-1836)</i></div><div><span>•</span> <i>Syn</i>: ↑<a href=Burr>Burr</a></div><div><span>•</span> <i>Instance Hypernyms</i>: ↑<a href=politician>politician</a>, ↑<a href=politico>politico</a>, ↑<a href=pol>pol</a>, ↑<a href=political leader>political leader</a></div>');
+    runCaseInvariantTests(true);
+    runCaseInsensitiveTests(true);
+    test('Files size is properly returned', () async {
+      expect(
+          (await IkvPackProxy.loadInIsolatePoolAndUseProxy(
+                  pool, 'test/testIkv.dat'))
+              .sizeBytes,
+          269324);
+    });
+
+    test(
+        'Consolidated keysStartingWith works on mixed Ikvs ( both case- sensitive, insensitive)',
+        () async {
+      var m = <String, String>{'': '', 'wew': 'dsdsd', 'sss': '', 'sdss': 'd'};
+      var ik = IkvPack.fromMap(m);
+      var ikvs = [
+        await await IkvPackProxy.loadInIsolatePoolAndUseProxy(
+            pool, 'test/testIkv.dat', true),
+        await await IkvPackProxy.loadInIsolatePoolAndUseProxy(
+            pool, 'test/testIkv.dat', false),
+        ik
+      ];
+
+      var keys = await IkvPack.consolidatedKeysStartingWith(ikvs, 'зьнізіць');
+// Shadow keys used in case-insensitive, original key in sensitive, that's why same values are returned
+// [0]:"зьнізіць"
+// [1]:"зьнізіць"
+      expect(keys.length, 2);
+      expect(keys[0], 'зьнізіць');
+
+      keys = await IkvPack.consolidatedKeysStartingWith(ikvs, 'b', 10);
+      expect(keys.length, 10);
+    });
+
+    test('Flags are properly read from file', () async {
+      var ikv00 = await await IkvPackProxy.loadInIsolatePoolAndUseProxy(
+          pool, 'test/testIkv.dat');
+      expect(ikv00.noOutOfOrderFlag, false);
+      expect(ikv00.noUpperCaseFlag, false);
+      var ikv11 = await IkvPackProxy.loadInIsolatePoolAndUseProxy(
+          pool, 'test/testIkvFlags.dat');
+      expect(ikv11.noOutOfOrderFlag, true);
+      expect(ikv11.noUpperCaseFlag, true);
+    });
+
+    test('Flags are respetcted when creating shadow keys', () async {
+      var ikv11 = await IkvPackProxy.loadInIsolatePoolAndUseProxy(
+          pool, 'test/testIkvFlags.dat');
+      expect(ikv11.noOutOfOrderFlag, true);
+      expect(ikv11.noUpperCaseFlag, true);
+      expect(ikv11.shadowKeysUsed, false);
+    });
   });
 }

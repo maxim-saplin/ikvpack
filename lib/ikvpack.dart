@@ -7,5 +7,6 @@
 /// Copyright (c) 2020 Maxim Saplin
 library ikvpack;
 
-export 'src/ikvpack_core.dart' show IkvPack, IkvInfo, fixOutOfOrder;
+export 'src/ikvpack_core.dart'
+    show IkvPack, IkvPackProxy, IkvInfo, fixOutOfOrder;
 export 'src/isolate_helpers.dart';

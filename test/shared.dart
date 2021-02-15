@@ -15,13 +15,13 @@ void setIkv(IkvPack ikv) {
 
 IkvPack get ikv => _ikv;
 
-void runCaseInvariantTests() {
+void runCaseInvariantTests([bool proxySkip = false]) {
   test('Can serach key by index', () {
     var k = _ikv.keys[0];
     expect(k, '36');
     k = _ikv.keys[1];
     expect(k, 'Aaron Burr');
-  });
+  }, skip: proxySkip);
 
   test('Can get value by index', () async {
     var v = await _ikv.valueAt(0);
@@ -57,7 +57,7 @@ void runCaseInvariantTests() {
     expect(v, '<div>вспахать</div>');
   });
 
-  test('Can get raw uncompressed value', () async {
+  test('Can get raw uncompressed value via index', () async {
     var v = await _ikv.valueRawCompressed('зараць');
     expect(v.isNotEmpty, true);
     var index = _ikv.indexOf('зараць');
@@ -65,6 +65,19 @@ void runCaseInvariantTests() {
     var utf = utf8.encode(uncompressed);
     var compressed = Deflate(utf).getBytes();
     v = await _ikv.valueRawCompressedAt(index);
+    expect(v.isNotEmpty, true);
+    expect(compressed.length, v.length);
+    expect(compressed[0], v[0]);
+    expect(compressed[compressed.length - 1], v[compressed.length - 1]);
+  }, skip: proxySkip);
+
+  test('Can get raw uncompressed value via key', () async {
+    var v = await _ikv.valueRawCompressed('зараць');
+    expect(v.isNotEmpty, true);
+    var uncompressed = '<div>вспахать</div>';
+    var utf = utf8.encode(uncompressed);
+    var compressed = Deflate(utf).getBytes();
+    v = await _ikv.valueRawCompressed('зараць');
     expect(v.isNotEmpty, true);
     expect(compressed.length, v.length);
     expect(compressed[0], v[0]);
@@ -85,14 +98,15 @@ void runCaseInvariantTests() {
     expect(_ikv.containsKey('wewer'), false);
     expect(await _ikv['wewer'], '');
     expect((await _ikv.valueRawCompressed('wewer')).isEmpty, true);
-  });
+  }, skip: proxySkip);
 }
 
-void runCaseInsensitiveTests() {
+// Tests again IkvProxy with IkvPack leaving in isolate do not support all IkvPack APIs and are skipped
+void runCaseInsensitiveTests([bool proxySkip = false]) {
   test('Out of order keys are fixed (ё isnt below я)', () {
     var k = _ikv.keys[_ikv.keys.length - 1];
     expect(k, 'яскравасьць');
-  });
+  }, skip: proxySkip);
 
   test('Case-insensitive search by key works', () async {
     var v = await _ikv['afrikaans'];
@@ -106,7 +120,7 @@ void runCaseInsensitiveTests() {
     expect(_ikv.keys[_ikv.keys.length - 8] == 'эліпс', true);
     expect(_ikv.keys[_ikv.keys.length - 3] == 'юродзівасьць', true);
     expect(_ikv.keys[_ikv.keys.length - 1] == 'яскравасьць', true);
-  });
+  }, skip: proxySkip);
 
   test('Key keysStartingWith() limits the result', () async {
     var keys = await _ikv.keysStartingWith('an', 3);
@@ -152,6 +166,21 @@ void runCaseInsensitiveTests() {
 
     keys = await IkvPack.consolidatedKeysStartingWith(ikvs, 'b', 10);
     expect(keys.length, 10);
+  });
+
+  test('Consolidated keysStartingWith works returns properly sorted keys',
+      () async {
+    var ikvs = [_ikv, _ikv];
+
+    var keys = await IkvPack.consolidatedKeysStartingWith(ikvs, 'a');
+
+    expect(keys[0], 'Aaron Burr');
+    expect(keys[1], 'ablutionary');
+    expect(keys[2], 'abstentious');
+    expect(keys[3], 'accentual system');
+    expect(keys[4], 'Acer macrophyllum');
+    expect(keys[5], 'acneiform');
+    expect(keys[6], 'actinic ray');
   });
 
   test(

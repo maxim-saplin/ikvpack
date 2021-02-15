@@ -932,7 +932,7 @@ class KeyPair {
 
 List<KeyPair> _distinctShadow(List<KeyPair> list) {
   if (list.isEmpty) return list;
-  list.sort((a, b) => a.original.compareTo(b.shadow));
+  list.sort((a, b) => a.shadow.compareTo(b.shadow));
   var unique = <KeyPair>[];
   unique.add(list[0]);
 

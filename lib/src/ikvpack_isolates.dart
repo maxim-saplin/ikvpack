@@ -21,6 +21,37 @@ class IkvPackInstanceWorker extends PooledInstanceWorker {
         var ac = action as GetRangeAction;
         var r = _ikv.getRange(ac.startIndex, ac.endIndex);
         return r;
+      case GetRangeRawAction:
+        var ac = action as GetRangeRawAction;
+        var r = _ikv.getRangeRaw(ac.startIndex, ac.endIndex);
+        return r;
+      case GetStatsAction:
+        var r = _ikv.getStats();
+        return r;
+      case KeysStartingWithAction:
+        var ac = action as KeysStartingWithAction;
+        var r = _ikv.keysStartingWith(ac.key, ac.maxResults);
+        return r;
+      case SaveToAction:
+        var ac = action as SaveToAction;
+        var r = _ikv.saveTo(ac.path);
+        return r;
+      case ValueAction:
+        var ac = action as ValueAction;
+        var r = _ikv.value(ac.key);
+        return r;
+      case ValueAtAction:
+        var ac = action as ValueAtAction;
+        var r = _ikv.valueAt(ac.index);
+        return r;
+      case ValueRawConpressedAction:
+        var ac = action as ValueRawConpressedAction;
+        var r = _ikv.valueRawCompressed(ac.key);
+        return r;
+      case ValueRawConpressedAtAction:
+        var ac = action as ValueRawConpressedAtAction;
+        var r = _ikv.valueRawCompressedAt(ac.index);
+        return r;
       default:
         throw 'Unknow action ${action.runtimeType}';
     }
@@ -52,6 +83,58 @@ class GetRangeAction extends Action {
   GetRangeAction(this.startIndex, this.endIndex);
 }
 
+class GetRangeRawAction extends Action {
+  final int? startIndex;
+  final int? endIndex;
+
+  GetRangeRawAction(this.startIndex, this.endIndex);
+}
+
+class GetStatsAction extends Action {}
+
+class KeysStartingWithAction extends Action {
+  final String key;
+  final int maxResults;
+
+  KeysStartingWithAction(this.key, this.maxResults);
+}
+
+class SaveToAction extends Action {
+  final String path;
+
+  SaveToAction(this.path);
+}
+
+class SaveToCallbackAction extends Action {
+  final int progressPercent;
+
+  SaveToCallbackAction(this.progressPercent);
+}
+
+class ValueAction extends Action {
+  final String key;
+
+  ValueAction(this.key);
+}
+
+class ValueAtAction extends Action {
+  final int index;
+
+  ValueAtAction(this.index);
+}
+
+class ValueRawConpressedAction extends Action {
+  final String key;
+
+  ValueRawConpressedAction(this.key);
+}
+
+class ValueRawConpressedAtAction extends Action {
+  final int index;
+
+  ValueRawConpressedAtAction(this.index);
+}
+
 class IkvPackProxy implements IkvPack {
   IkvPackProxy._(String path, [this._keysCaseInsensitive = true])
       : _valuesInMemory = false;
@@ -62,7 +145,15 @@ class IkvPackProxy implements IkvPack {
       IsolatePool pool, String path,
       [keysCaseInsensitive = true]) async {
     var ikv = IkvPackProxy._(path, keysCaseInsensitive);
-    ikv._pi = await pool.createInstance(IkvPackInstanceWorker());
+    ikv._pi = await pool.createInstance(IkvPackInstanceWorker(), (action) {
+      switch (action.runtimeType) {
+        case SaveToCallbackAction:
+          return ikv._saveToCallback != null
+              ? ikv._saveToCallback!(
+                  (action as SaveToCallbackAction).progressPercent)
+              : null;
+      }
+    });
 
     var r = await ikv._pi.callRemoteMethod<LoadActionResult>(
         LoadAction(path, keysCaseInsensitive));
@@ -131,12 +222,13 @@ class IkvPackProxy implements IkvPack {
   @override
   Future<LinkedHashMap<String, Uint8List>> getRangeRaw(
       int? startIndex, int? endIndex) {
-    throw UnimplementedError();
+    return _pi.callRemoteMethod<LinkedHashMap<String, Uint8List>>(
+        GetRangeRawAction(startIndex, endIndex));
   }
 
   @override
   Future<Stats> getStats() {
-    throw UnimplementedError();
+    return _pi.callRemoteMethod<Stats>(GetStatsAction());
   }
 
   @override
@@ -151,15 +243,21 @@ class IkvPackProxy implements IkvPack {
   UnmodifiableListView<String> get keys => throw UnimplementedError();
 
   @override
-  Future<List<KeyPair>> keysStartingWith(String key,
-      [int maxResults = 100, bool returnShadowKeys = false]) {
-    throw UnimplementedError();
+  Future<List<KeyPair>> keysStartingWith(String key, [int maxResults = 100]) {
+    return _pi.callRemoteMethod<List<KeyPair>>(
+        KeysStartingWithAction(key, maxResults));
   }
+
+  Function(int progressPercent)? _saveToCallback;
 
   @override
   Future<void> saveTo(String path,
-      [Function(int progressPercent)? updateProgress]) {
-    throw UnimplementedError();
+      [Function(int progressPercent)? updateProgress]) async {
+    _saveToCallback = updateProgress;
+    var r = await _pi.callRemoteMethod(SaveToAction(path));
+    _saveToCallback = null;
+
+    return r;
   }
 
   @override
@@ -170,22 +268,22 @@ class IkvPackProxy implements IkvPack {
 
   @override
   Future<String> value(String key) {
-    throw UnimplementedError();
+    return _pi.callRemoteMethod<String>(ValueAction(key));
   }
 
   @override
   Future<String> valueAt(int index) {
-    throw UnimplementedError();
+    return _pi.callRemoteMethod<String>(ValueAtAction(index));
   }
 
   @override
   Future<Uint8List> valueRawCompressed(String key) {
-    throw UnimplementedError();
+    return _pi.callRemoteMethod<Uint8List>(ValueRawConpressedAction(key));
   }
 
   @override
   Future<Uint8List> valueRawCompressedAt(int index) {
-    throw UnimplementedError();
+    return _pi.callRemoteMethod<Uint8List>(ValueRawConpressedAtAction(index));
   }
 }
 
