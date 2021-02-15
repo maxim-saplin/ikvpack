@@ -5,7 +5,7 @@ import 'dart:typed_data';
 import '../ikvpack_core.dart';
 
 class Storage extends StorageBase {
-  Storage(this.path) : _file = File(path).openSync() {
+  Storage(this._path) : _file = File(_path).openSync() {
     var f = _file as RandomAccessFile;
     f.setPositionSync(Headers.offset);
     var h = f.readSync(Headers.bytesSize);
@@ -37,7 +37,9 @@ class Storage extends StorageBase {
     _file = null;
   }
 
-  final String path;
+  @override
+  String get path => _path;
+  final String _path;
 
   late Headers _headers;
 

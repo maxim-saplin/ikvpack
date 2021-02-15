@@ -17,27 +17,328 @@ import 'storage_impl/storage_vm.dart'
 part 'ikvpack_storage.dart';
 part 'ikvpack_isolates.dart';
 
-List<String> keysStartingWith(Iterable<IkvPack> packs) {
-  var keys = <String>[];
-  return keys;
+/// IkvPack abstract class provides inreface to a certain implementations
+/// of the class. There're currently 2 implementations, IkvPackImpl and IkvPackProxy.
+/// The former is the actual implementation of IkvPack features, the latter
+/// creates IkvPackImpl istances in isolates under isloate pool and
+/// communicates with them across isolate boundaries via sort of RPC - this
+/// is required for the cases when multiple large IkvPacks need to be quickly created.
+/// Simply creating IkvPack in spawned isolate and returning it to main one proved
+/// to be very slow due to siginificant overhead when serializing the whole object
+abstract class IkvPack {
+  StorageBase? get storage;
+
+  UnmodifiableListView<String> get keys;
+  UnmodifiableListView<String> get shadowKeys;
+  UnmodifiableListView<KeyBasket> get keyBaskets;
+
+  List<String> get _kswOriginalKeys;
+
+  bool get keysCaseInsensitive;
+  bool get shadowKeysUsed;
+  bool get valuesInMemory;
+
+  bool get noOutOfOrderFlag;
+  bool get noUpperCaseFlag;
+
+  Future<void> saveTo(String path,
+      [Function(int progressPercent)? updateProgress]);
+
+  Future<LinkedHashMap<String, Uint8List>> getRangeRaw(
+      int? startIndex, int? endIndex);
+
+  Future<LinkedHashMap<String, String>> getRange(
+      int? startIndex, int? endIndex);
+
+  Future<String> valueAt(int index);
+
+  Future<Uint8List> valueRawCompressedAt(int index);
+
+  Future<Uint8List> valueRawCompressed(String key);
+
+  Future<String> value(String key);
+
+  Future<String> operator [](String key);
+
+  bool containsKey(String key);
+
+  int indexOf(String key);
+
+  List<String> keysStartingWith(String key,
+      [int maxResults = 100, bool returnShadowKeys = false]);
+
+  int get length;
+
+  int get sizeBytes;
+
+  void dispose();
+
+  Future<Stats> getStats();
+
+  /// Deletes file on disk or related IndexedDB in Web
+  static void delete(String path) {
+    deleteFromPath(path);
+  }
+
+  /// Helper methods that searches for keys in a number of packs
+  /// and returns a unique set of keys. If keysCaseInsesitive, shadow
+  /// versions are used for matches, but original keys are returned
+  static List<String> consolidatedKeysStartingWith(
+      Iterable<IkvPack> packs, String value,
+      [int maxResults = 100]) {
+    // var sw = Stopwatch();
+    // sw.start();
+    var matches = <String>[];
+
+    var max2 = maxResults;
+    var tuples = <Tupple<String, String>>[];
+
+    for (var p in packs) {
+      var i = 0;
+      tuples.addAll(
+          p.keysStartingWith(value, max2, p.keysCaseInsensitive).map((e) {
+        return Tupple(e, p.keysCaseInsensitive ? p._kswOriginalKeys[i++] : e);
+      }));
+      if (tuples.length > maxResults) max2 = (maxResults / 2).floor();
+      if (tuples.length > 3 * maxResults) max2 = (maxResults / 2).floor();
+    }
+
+    if (tuples.isNotEmpty) {
+      tuples = _distinct(tuples);
+
+      if (tuples.length > maxResults) {
+        tuples = tuples.sublist(0, min(maxResults, tuples.length));
+      }
+
+      //recover original keys
+      matches = tuples.map((e) => e.item2).toList();
+    }
+
+    return matches;
+  }
+
+  static Future<String> getStatsAsCsv(Iterable<IkvPack> packs) async {
+    var s = StringBuffer(
+        'Ikv;keysNumber;distinctKeysNumber;shadowKeysDifferentFromOrigNumber;'
+        'keysBytes;valuesBytes;keysTotalChars;minKeyLength;maxKeyLength;avgKeyLength;'
+        'avgKeyBytes;avgCharBytes;avgValueBytes;');
+
+    for (var i in packs) {
+      print('Getting stats for ${i.storage!.path}');
+      var stats = await i.getStats();
+      s.writeln();
+      s.write(i.storage!.path);
+      s.write(';');
+      s.write(stats.keysNumber);
+      s.write(';');
+      s.write(stats.distinctKeysNumber);
+      s.write(';');
+      s.write(stats.shadowKeysDifferentFromOrigNumber);
+      s.write(';');
+      s.write(stats.keysBytes);
+      s.write(';');
+      s.write(stats.valuesBytes);
+      s.write(';');
+      s.write(stats.keysTotalChars);
+      s.write(';');
+      s.write(stats.minKeyLength);
+      s.write(';');
+      s.write(stats.maxKeyLength);
+      s.write(';');
+      s.write(stats.avgKeyLength);
+      s.write(';');
+      s.write(stats.avgKeyBytes);
+      s.write(';');
+      s.write(stats.avgCharBytes);
+      s.write(';');
+      s.write(stats.avgValueBytes);
+      s.write(';');
+    }
+
+    return s.toString();
+  }
+
+  /// Get Ikv size and length without expensively loading it into memory
+  static Future<IkvInfo> getInfo(String path) async {
+    return storageGetInfo(path);
+  }
+
+  factory IkvPack.fromMap(Map<String, String> map,
+      [keysCaseInsensitive = true,
+      Function(int progressPercent)? updateProgress,
+      bool awaitProgreess = false]) {
+    return IkvPackImpl.fromMap(
+        map, keysCaseInsensitive, updateProgress, awaitProgreess);
+  }
+
+  factory IkvPack.fromBytes(ByteData bytes,
+      [keysCaseInsensitive = true,
+      Function(int progressPercent)? updateProgress]) {
+    return IkvPackImpl.fromBytes(bytes, keysCaseInsensitive, updateProgress);
+  }
+
+  static Future<IkvPack> buildFromMapInIsolate(Map<String, String> map,
+      [keysCaseInsensitive = true,
+      Function(int progressPercent)? updateProgress]) {
+    var ic = CallbackIsolate(IkvCallbackJob(map, keysCaseInsensitive));
+    return ic.run((arg) => updateProgress?.call(arg));
+  }
+
+  /// Building the object can be time consuming and can block the main UI thread, splitting the
+  /// build into multiple microtasks via awaiting updateProgress claback (and giving control up the stream).
+  /// If the progress callback returns null build process is canceled, the method returns null
+  /// Future<bool> _awaitableUpdateProgeress(int progress) {
+  ///  if (_canceled) return null;
+  ///  return Future(() {
+  ///    propgressProperty = progress;
+  ///    notifyListener()
+  ///    return false;
+  ///  });
+  /// }
+  /// ...
+  /// var ikv = await IkvPack.buildFromMapAsync(map, true, (progress) async {
+  ///      return _awaitableUpdateProgeress(progress);
+  ///    });
+  static Future<IkvPack?> buildFromMapAsync(Map<String, String> map,
+      [keysCaseInsensitive = true,
+      Future? Function(int progressPercent)? updateProgress]) async {
+    var ikv = IkvPackImpl.__(keysCaseInsensitive);
+
+    var entries = ikv._getSortedEntriesFromMap(map);
+
+    if (updateProgress != null && await updateProgress(5) == null) return null;
+
+    ikv._buildOriginalKeys(entries);
+    if (updateProgress != null && await updateProgress(10) == null) return null;
+
+    ikv._buildShadowKeys(entries);
+    if (updateProgress != null && await updateProgress(15) == null) return null;
+
+    var progress = 15;
+    var prevProgress = 15;
+
+    ikv._values = <Uint8List>[];
+
+    for (var i = 0; i < entries.length; i++) {
+      var utf = utf8.encode(entries[i].value);
+      var zip = Uint8List.fromList(Deflate(utf).getBytes());
+      if (updateProgress != null) {
+        progress = (15 + 80 * i / entries.length).round();
+        if (progress != prevProgress) {
+          prevProgress = progress;
+          if (await updateProgress(progress) == null) return null;
+        }
+      }
+
+      ikv._values.add(zip);
+    }
+
+    if (updateProgress != null && await updateProgress(95) == null) return null;
+
+    ikv._keysReadOnly = UnmodifiableListView<String>(ikv._originalKeys);
+    ikv._buildBaskets();
+    if (updateProgress != null && await updateProgress(100) == null) {
+      return null;
+    }
+
+    return ikv;
+  }
+
+  /// Creates object from binary DIKT image (e.g. when DIKT file is loaded to memory)
+  /// Can report progress and be canceled, see buildFromMapAsync() for details
+  static Future<IkvPack?> buildFromBytesAsync(ByteData bytes,
+      [keysCaseInsensitive = true,
+      Future? Function(int progressPercent)? updateProgress]) async {
+    if (updateProgress != null && await updateProgress(0) == null) return null;
+    var t = parseBinary(bytes, keysCaseInsensitive);
+    if (updateProgress != null && await updateProgress(30) == null) return null;
+
+    var ikv = IkvPackImpl.__(keysCaseInsensitive);
+
+    IkvPackImpl._build(ikv, t.item1, keysCaseInsensitive, (progress) async {
+      return await updateProgress?.call(30 + (0.69 * progress).round());
+    });
+
+    ikv._values = t.item2;
+
+    if (updateProgress != null && await updateProgress(100) == null) {
+      return null;
+    }
+
+    return ikv;
+  }
+
+  static Future<IkvPack> loadInIsolate(String path,
+      [keysCaseInsensitive = true]) async {
+    var completer = Completer<IkvPack>();
+    var receivePort = ReceivePort();
+    var errorPort = ReceivePort();
+    var params = _IsolateParams(
+        receivePort.sendPort, errorPort.sendPort, path, keysCaseInsensitive);
+
+    var isolate = await Isolate.spawn<_IsolateParams>(_loadIkv, params,
+        errorsAreFatal: true);
+
+    receivePort.listen((data) {
+      var ikv = (data as IkvPack);
+      isolate.kill();
+      ikv.storage?.reopenFile();
+      completer.complete(ikv);
+    });
+
+    errorPort.listen((e) {
+      completer.completeError(e);
+    });
+
+    return completer.future;
+  }
+
+  /// !Warning! Isolate pool needs to be maually started before using this method
+  /// and stoped when not needed anymore
+  static Future<IkvPack> loadInIsolatePool(IsolatePool pool, String path,
+      [keysCaseInsensitive = true]) async {
+    var completer = Completer<IkvPack>();
+
+    try {
+      var data = await pool.scheduleJob(IkvPooledJob(path, keysCaseInsensitive))
+          as IkvPackData;
+      var ikv = IkvPackImpl._(path, keysCaseInsensitive);
+      IkvPackImpl._build(ikv, data, keysCaseInsensitive);
+      ikv._storage?.reopenFile();
+
+      completer.complete(ikv);
+    } catch (e) {
+      completer.completeError(e);
+    }
+
+    return completer.future;
+  }
+
+  static Future<IkvPack> load(String path, [keysCaseInsensitive = true]) {
+    return IkvPackImpl.load(path, keysCaseInsensitive);
+  }
 }
 
-class IkvPack {
+class IkvPackImpl implements IkvPack {
+  @override
+  Storage? get storage => _storage;
   final Storage? _storage;
 
   bool _shadowKeysUsed = false;
+  @override
   bool get shadowKeysUsed => _shadowKeysUsed;
 
-  IkvPack._(String path, [this.keysCaseInsensitive = true])
+  IkvPackImpl._(String path, [this._keysCaseInsensitive = true])
       : _valuesInMemory = false,
         _storage = Storage(path);
 
-  IkvPack.__([this.keysCaseInsensitive = true])
+  IkvPackImpl.__([this._keysCaseInsensitive = true])
       : _valuesInMemory = true,
         _storage = null;
 
-  static Future<IkvPack> load(String path, [keysCaseInsensitive = true]) async {
-    var ikv = IkvPack._(path, keysCaseInsensitive);
+  static Future<IkvPackImpl> load(String path,
+      [keysCaseInsensitive = true]) async {
+    var ikv = IkvPackImpl._(path, keysCaseInsensitive);
     late IkvPackData data;
 
     try {
@@ -52,7 +353,7 @@ class IkvPack {
     return ikv;
   }
 
-  static void _build(IkvPack ikv, IkvPackData data, keysCaseInsensitive,
+  static void _build(IkvPackImpl ikv, IkvPackData data, keysCaseInsensitive,
       [Function(int progressPercent)? updateProgress]) {
     if (updateProgress?.call(0) == true) return;
     ikv._originalKeys = data.originalKeys;
@@ -100,67 +401,14 @@ class IkvPack {
     if (updateProgress?.call(100) == true) return;
   }
 
-  static Future<IkvPack> loadInIsolate(String path,
-      [keysCaseInsensitive = true]) async {
-    var completer = Completer<IkvPack>();
-    var receivePort = ReceivePort();
-    var errorPort = ReceivePort();
-    var params = _IsolateParams(
-        receivePort.sendPort, errorPort.sendPort, path, keysCaseInsensitive);
-
-    var isolate = await Isolate.spawn<_IsolateParams>(_loadIkv, params,
-        errorsAreFatal: true);
-
-    receivePort.listen((data) {
-      var ikv = (data as IkvPack);
-      isolate.kill();
-      ikv._storage?.reopenFile();
-      completer.complete(ikv);
-    });
-
-    errorPort.listen((e) {
-      completer.completeError(e);
-    });
-
-    return completer.future;
-  }
-
-  /// !Warning! Isolate pool needs to be maually started before using this method
-  /// and stoped when not needed anymore
-  static Future<IkvPack> loadInIsolatePool(IsolatePool pool, String path,
-      [keysCaseInsensitive = true]) async {
-    var completer = Completer<IkvPack>();
-
-    try {
-      var data = await pool.scheduleJob(IkvPooledJob(path, keysCaseInsensitive))
-          as IkvPackData;
-      var ikv = IkvPack._(path, keysCaseInsensitive);
-      _build(ikv, data, keysCaseInsensitive);
-      // ikv._originalKeys = data.originalKeys;
-      // ikv._keysReadOnly = UnmodifiableListView<String>(ikv._originalKeys);
-      // ikv._keyBaskets = data.keyBaskets;
-      // ikv._shadowKeysUsed = data.shadowKeys.isNotEmpty;
-      // ikv._shadowKeys = data.shadowKeys;
-      ikv._storage?.reopenFile();
-
-      completer.complete(ikv);
-    } catch (e) {
-      completer.completeError(e);
-    }
-
-    return completer.future;
-  }
-
-  /// Deletes file on disk or related IndexedDB in Web
-  static void delete(String path) {
-    deleteFromPath(path);
-  }
-
   /// Do not do strcit comparisons by ignoring case.
   /// Make lowercase shadow version of keys and uses those for lookups.
   /// Also fix out of-order-chars, e.g. replace cyrylic 'ё' (code 1110 which in alphabet stands before 'я', code 1103)
   /// with 'е' (code 1077)
-  bool keysCaseInsensitive = true;
+  @override
+  bool get keysCaseInsensitive => _keysCaseInsensitive;
+
+  final bool _keysCaseInsensitive;
 
   List<String> _originalKeys = [];
   List<String> _shadowKeys = [];
@@ -168,7 +416,15 @@ class IkvPack {
   List<Uint8List> _values = [];
 
   UnmodifiableListView<String> _keysReadOnly = UnmodifiableListView<String>([]);
+  @override
   UnmodifiableListView<String> get keys => _keysReadOnly;
+
+  @override
+  UnmodifiableListView<String> get shadowKeys =>
+      UnmodifiableListView<String>(_shadowKeys);
+  @override
+  UnmodifiableListView<KeyBasket> get keyBaskets =>
+      UnmodifiableListView<KeyBasket>(_keyBaskets);
 
   /// Web implementation does not support indexed keys
   //bool get indexedKeys => true;
@@ -177,14 +433,22 @@ class IkvPack {
 
   /// Default constructor reads keys into memory while access file (or Indexed DB in Web)
   /// when a value is needed. fromMap() constructor stores everythin in memory
+  @override
   bool get valuesInMemory => _valuesInMemory;
+
+  @override
+  bool get noOutOfOrderFlag =>
+      storage != null ? storage!.noOutOfOrderFlag : false;
+  @override
+  bool get noUpperCaseFlag =>
+      storage != null ? storage!.noUpperCaseFlag : false;
 
   /// String values are compressed via Zlib, stored that way and are decompresed when values fetched
   /// map - the source for Keys/Values
   /// keysCaseInsensitive - lower cases shadow keys will be built to conduct fast case-insensitive searches while preserving original keys
   /// updateProgress - a callback to use to push updates of building the object, only usefull when run in isolate
-  IkvPack.fromMap(Map<String, String> map,
-      [this.keysCaseInsensitive = true,
+  IkvPackImpl.fromMap(Map<String, String> map,
+      [this._keysCaseInsensitive = true,
       Function(int progressPercent)? updateProgress,
       bool awaitProgreess = false])
       : _valuesInMemory = true,
@@ -221,76 +485,9 @@ class IkvPack {
     if (updateProgress != null) updateProgress(100);
   }
 
-  static Future<IkvPack> buildFromMapInIsolate(Map<String, String> map,
-      [keysCaseInsensitive = true,
-      Function(int progressPercent)? updateProgress]) {
-    var ic = CallbackIsolate(IkvCallbackJob(map, keysCaseInsensitive));
-    return ic.run((arg) => updateProgress?.call(arg));
-  }
-
-  /// Building the object can be time consuming and can block the main UI thread, splitting the
-  /// build into multiple microtasks via awaiting updateProgress claback (and giving control up the stream).
-  /// If the progress callback returns null build process is canceled, the method returns null
-  /// Future<bool> _awaitableUpdateProgeress(int progress) {
-  ///  if (_canceled) return null;
-  ///  return Future(() {
-  ///    propgressProperty = progress;
-  ///    notifyListener()
-  ///    return false;
-  ///  });
-  /// }
-  /// ...
-  /// var ikv = await IkvPack.buildFromMapAsync(map, true, (progress) async {
-  ///      return _awaitableUpdateProgeress(progress);
-  ///    });
-  static Future<IkvPack?> buildFromMapAsync(Map<String, String> map,
-      [keysCaseInsensitive = true,
-      Future? Function(int progressPercent)? updateProgress]) async {
-    var ikv = IkvPack.__(keysCaseInsensitive);
-
-    var entries = ikv._getSortedEntriesFromMap(map);
-
-    if (updateProgress != null && await updateProgress(5) == null) return null;
-
-    ikv._buildOriginalKeys(entries);
-    if (updateProgress != null && await updateProgress(10) == null) return null;
-
-    ikv._buildShadowKeys(entries);
-    if (updateProgress != null && await updateProgress(15) == null) return null;
-
-    var progress = 15;
-    var prevProgress = 15;
-
-    ikv._values = <Uint8List>[];
-
-    for (var i = 0; i < entries.length; i++) {
-      var utf = utf8.encode(entries[i].value);
-      var zip = Uint8List.fromList(Deflate(utf).getBytes());
-      if (updateProgress != null) {
-        progress = (15 + 80 * i / entries.length).round();
-        if (progress != prevProgress) {
-          prevProgress = progress;
-          if (await updateProgress(progress) == null) return null;
-        }
-      }
-
-      ikv._values.add(zip);
-    }
-
-    if (updateProgress != null && await updateProgress(95) == null) return null;
-
-    ikv._keysReadOnly = UnmodifiableListView<String>(ikv._originalKeys);
-    ikv._buildBaskets();
-    if (updateProgress != null && await updateProgress(100) == null) {
-      return null;
-    }
-
-    return ikv;
-  }
-
   /// Creates object from binary DIKT image (e.g. when DIKT file is loaded to memory)
-  IkvPack.fromBytes(ByteData bytes,
-      [this.keysCaseInsensitive = true,
+  IkvPackImpl.fromBytes(ByteData bytes,
+      [this._keysCaseInsensitive = true,
       Function(int progressPercent)? updateProgress])
       : _valuesInMemory = true,
         _storage = null {
@@ -304,30 +501,6 @@ class IkvPack {
 
     _values = t.item2;
     if (updateProgress?.call(100) == true) return;
-  }
-
-  /// Creates object from binary DIKT image (e.g. when DIKT file is loaded to memory)
-  /// Can report progress and be canceled, see buildFromMapAsync() for details
-  static Future<IkvPack?> buildFromBytesAsync(ByteData bytes,
-      [keysCaseInsensitive = true,
-      Future? Function(int progressPercent)? updateProgress]) async {
-    if (updateProgress != null && await updateProgress(0) == null) return null;
-    var t = parseBinary(bytes, keysCaseInsensitive);
-    if (updateProgress != null && await updateProgress(30) == null) return null;
-
-    var ikv = IkvPack.__(keysCaseInsensitive);
-
-    _build(ikv, t.item1, keysCaseInsensitive, (progress) async {
-      return await updateProgress?.call(30 + (0.69 * progress).round());
-    });
-
-    ikv._values = t.item2;
-
-    if (updateProgress != null && await updateProgress(100) == null) {
-      return null;
-    }
-
-    return ikv;
   }
 
   void _buildShadowKeys(List<_Triple> entries) {
@@ -371,39 +544,6 @@ class IkvPack {
 
     return list;
   }
-
-  // List<_Triple<Uint8List>> _getSortedEntriesFromLists(
-  //     List<String> keys, List<Uint8List> values) {
-  //   assert(keys.isNotEmpty, 'Keys can\'t be empty');
-  //   assert(values.isNotEmpty, 'Values can\'t be empty');
-  //   if (keys.length != values.length) {
-  //     throw 'keys.length isn\'t equal to values.length';
-  //   }
-
-  //   Iterable<_Triple<Uint8List>>? entries;
-
-  //   if (keysCaseInsensitive) {
-  //     entries = List<_Triple<Uint8List>>.generate(keys.length,
-  //         (index) => _Triple<Uint8List>.lowerCase(keys[index], values[index]));
-  //   } else {
-  //     entries = List<_Triple<Uint8List>>.generate(
-  //         keys.length,
-  //         (index) =>
-  //             _Triple<Uint8List>.noLowerCase(keys[index], values[index]));
-  //   }
-
-  //   var list = _fixKeysAndValues<Uint8List>(entries);
-
-  //   assert(list.isNotEmpty, 'Refined Key/Value collection can\'t be empty');
-
-  //   if (keysCaseInsensitive) {
-  //     list.sort((e1, e2) => e1.keyLowerCase.compareTo(e2.keyLowerCase));
-  //   } else {
-  //     list.sort((e1, e2) => e1.key.compareTo(e2.key));
-  //   }
-
-  //   return list;
-  // }
 
   List<_Triple<T>> _fixKeysAndValues<T>(Iterable<_Triple> entries) {
     var fixed = <_Triple<T>>[];
@@ -452,6 +592,7 @@ class IkvPack {
   /// updateProgress callback is only implemented for Web and ignored on VM
   /// Return 'true' from updateProgress to break the operation
   /// Unlike buildFromMapAsyn()c there's no need to return Future from the callback (and await it inside the method to free microtask queue and unblock UI, there're other awaits that allow to do this without extra Future)
+  @override
   Future<void> saveTo(String path,
       [Function(int progressPercent)? updateProgress]) async {
     var data = IkvPackData(_originalKeys, _shadowKeys, _keyBaskets);
@@ -460,6 +601,7 @@ class IkvPack {
 
   /// Creates a list of entries for a given range (if provided) or all keys/values.
   /// Key order is preserved
+  @override
   Future<LinkedHashMap<String, Uint8List>> getRangeRaw(
       int? startIndex, int? endIndex) async {
     var start = startIndex ?? 0;
@@ -487,6 +629,7 @@ class IkvPack {
 
   /// Creates a list of entries for a given range (if provided) or all keys/values.
   /// Key order is preserved
+  @override
   Future<LinkedHashMap<String, String>> getRange(
       int? startIndex, int? endIndex) async {
     var start = startIndex ?? 0;
@@ -512,10 +655,12 @@ class IkvPack {
     return result;
   }
 
+  @override
   int get length => _originalKeys.length;
 
   @pragma('vm:prefer-inline')
   @pragma('dart2js:tryInline')
+  @override
   Future<String> valueAt(int index) async {
     var bytes = valuesInMemory
         ? Inflate(_values[index]).getBytes()
@@ -530,6 +675,7 @@ class IkvPack {
 
   @pragma('vm:prefer-inline')
   @pragma('dart2js:tryInline')
+  @override
   Future<Uint8List> valueRawCompressedAt(int index) async {
     var bytes = valuesInMemory
         ? _values[index]
@@ -542,6 +688,7 @@ class IkvPack {
 
   @pragma('vm:prefer-inline')
   @pragma('dart2js:tryInline')
+  @override
   Future<String> value(String key) async {
     var index = indexOf(key);
     if (index < 0) return ''; //throw 'key not foiund';
@@ -554,6 +701,7 @@ class IkvPack {
 
   @pragma('vm:prefer-inline')
   @pragma('dart2js:tryInline')
+  @override
   Future<Uint8List> valueRawCompressed(String key) async {
     var index = indexOf(key);
     if (index < 0) return Uint8List(0); //throw 'key not foiund';
@@ -566,6 +714,7 @@ class IkvPack {
   /// Returns decompressed value
   @pragma('vm:prefer-inline')
   @pragma('dart2js:tryInline')
+  @override
   Future<String> operator [](String key) async {
     return value(key);
   }
@@ -573,6 +722,7 @@ class IkvPack {
   /// -1 if not found
   @pragma('vm:prefer-inline')
   @pragma('dart2js:tryInline')
+  @override
   int indexOf(String key) {
     var list = _originalKeys;
     if (keysCaseInsensitive) {
@@ -620,6 +770,7 @@ class IkvPack {
 
   @pragma('vm:prefer-inline')
   @pragma('dart2js:tryInline')
+  @override
   bool containsKey(String key) => indexOf(key) > -1;
 
   int _narrowDownFirst(String key, KeyBasket b, List<String> list) {
@@ -647,14 +798,14 @@ class IkvPack {
   }
 
 // Used by consolidated lookup to recover original keys
-  //int _kswi = 0;
-
-  final List<String> _kswOriginalKeys = [];
+  @override
+  List<String> get _kswOriginalKeys => __kswOriginalKeys;
+  final List<String> __kswOriginalKeys = [];
 
   /// Efficiently search keys that start with given srting. if keysCaseInsensitive == true
   /// than use lower case shadow keys for comparisons - in this case there can be 2+ different
   /// original keys while when kower case thay will be the same (e.g. Aa and aA are both aa when lower case, JIC original keys are always unique, shadow keys are not guaranteed)
-  ///
+  @override
   List<String> keysStartingWith(String key,
       [int maxResults = 100, bool returnShadowKeys = false]) {
     //var keys = <String>[];
@@ -674,8 +825,6 @@ class IkvPack {
 
     var fl = key[0].codeUnits[0];
 
-    //var matches = <String, int>{};
-
     var result = <String>[];
     _kswOriginalKeys.clear();
 
@@ -684,13 +833,6 @@ class IkvPack {
         var startIndex = b.startIndex;
         var endIndex = b.endIndex;
 
-        // if (key.length == 1) {
-        //   _kswi = startIndex;
-        //   return (_shadowKeysUsed && returnShadowKeys
-        //           ? _shadowKeys
-        //           : _originalKeys)
-        //       .sublist(startIndex, min(endIndex + 1, startIndex + maxResults));
-        // } else {
         if (key.length > 1) {
           var f = _narrowDownFirst(key, b, list);
           startIndex = f > -1 ? f : startIndex;
@@ -709,16 +851,8 @@ class IkvPack {
               prevK = k;
             }
             if (result.length >= maxResults) {
-              //_kswi = i - result.length + 1;
               return result;
             }
-            // if (!matches.containsKey(k)) {
-            //   matches[k] = 0;
-            // }
-            // if (matches.length >= maxResults) {
-            //   _kswi = i - matches.length + 1;
-            //   return matches.keys.toList();
-            // }
           }
         }
 
@@ -726,67 +860,22 @@ class IkvPack {
       }
     }
 
-    //return matches.keys.toList();
     return result;
   }
 
+  @override
   void dispose() {
     _storage?.dispose();
   }
 
+  @override
   int get sizeBytes {
     if (valuesInMemory || _storage == null) return -1;
     return _storage!.sizeBytes;
   }
 
-  /// Get Ikv size and length without expensively loading it into memory
-  static Future<IkvInfo> getInfo(String path) async {
-    return storageGetInfo(path);
-  }
-
-  bool get noOutOfOrderFlag =>
-      _storage != null ? _storage!.noOutOfOrderFlag : false;
-  bool get noUpperCaseFlag =>
-      _storage != null ? _storage!.noUpperCaseFlag : false;
-
-  /// Helper methods that searches for keys in a number of packs
-  /// and returns a unique set of keys. If keysCaseInsesitive, shadow
-  /// versions are used for matches, but original keys are returned
-  static List<String> consolidatedKeysStartingWith(
-      Iterable<IkvPack> packs, String value,
-      [int maxResults = 100]) {
-    // var sw = Stopwatch();
-    // sw.start();
-    var matches = <String>[];
-
-    var max2 = maxResults;
-    var tuples = <Tupple<String, String>>[];
-
-    for (var p in packs) {
-      var i = 0;
-      tuples.addAll(
-          p.keysStartingWith(value, max2, p.keysCaseInsensitive).map((e) {
-        return Tupple(e, p.keysCaseInsensitive ? p._kswOriginalKeys[i++] : e);
-      }));
-      if (tuples.length > maxResults) max2 = (maxResults / 2).floor();
-      if (tuples.length > 3 * maxResults) max2 = (maxResults / 2).floor();
-    }
-
-    if (tuples.isNotEmpty) {
-      tuples = _distinct(tuples);
-
-      if (tuples.length > maxResults) {
-        tuples = tuples.sublist(0, min(maxResults, tuples.length));
-      }
-
-      //recover original keys
-      matches = tuples.map((e) => e.item2).toList();
-    }
-
-    return matches;
-  }
-
   /// Can be slow
+  @override
   Future<Stats> getStats() async {
     if (_storage == null) {
       throw 'Cant get stats on in-memory instance, only file based';
@@ -851,47 +940,6 @@ class IkvPack {
         maxKeyLength);
 
     return stats;
-  }
-
-  static Future<String> getStatsAsCsv(Iterable<IkvPack> packs) async {
-    var s = StringBuffer(
-        'Ikv;keysNumber;distinctKeysNumber;shadowKeysDifferentFromOrigNumber;'
-        'keysBytes;valuesBytes;keysTotalChars;minKeyLength;maxKeyLength;avgKeyLength;'
-        'avgKeyBytes;avgCharBytes;avgValueBytes;');
-
-    for (var i in packs) {
-      print('Getting stats for ${i._storage!.path}');
-      var stats = await i.getStats();
-      s.writeln();
-      s.write(i._storage!.path);
-      s.write(';');
-      s.write(stats.keysNumber);
-      s.write(';');
-      s.write(stats.distinctKeysNumber);
-      s.write(';');
-      s.write(stats.shadowKeysDifferentFromOrigNumber);
-      s.write(';');
-      s.write(stats.keysBytes);
-      s.write(';');
-      s.write(stats.valuesBytes);
-      s.write(';');
-      s.write(stats.keysTotalChars);
-      s.write(';');
-      s.write(stats.minKeyLength);
-      s.write(';');
-      s.write(stats.maxKeyLength);
-      s.write(';');
-      s.write(stats.avgKeyLength);
-      s.write(';');
-      s.write(stats.avgKeyBytes);
-      s.write(';');
-      s.write(stats.avgCharBytes);
-      s.write(';');
-      s.write(stats.avgValueBytes);
-      s.write(';');
-    }
-
-    return s.toString();
   }
 }
 

@@ -201,6 +201,22 @@ void main() {
     expect(err != '', true);
   });
 
+  test('Calling method with pool stopped is handled', () async {
+    var _pool = IsolatePool(4);
+    await _pool.start();
+    var pi = await _pool.createInstance(WorkerA(), null);
+    expect(_pool.numberOfPooledInstances, 1);
+    _pool.stop();
+    var err = '';
+    try {
+      await pi.callRemoteMethod(SumIntAction(1, 1));
+    } catch (e) {
+      err = e.toString();
+    }
+    expect(
+        err, 'Isolate pool has been stoped, cant call pooled instnace method');
+  });
+
   test('Can stop while there\'re instances being created', () async {
     var _pool = IsolatePool(5);
     await _pool.start();

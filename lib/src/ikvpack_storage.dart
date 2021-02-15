@@ -125,6 +125,7 @@ abstract class StorageBase {
   bool get noOutOfOrderFlag;
   bool get noUpperCaseFlag;
 
+  String get path;
   Future<IkvPackData> readSortedData(bool getShadowKeys);
   Future<Uint8List> value(String key);
   Future<Uint8List> valueAt(int index);

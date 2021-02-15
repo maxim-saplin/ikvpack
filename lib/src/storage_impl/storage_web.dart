@@ -9,8 +9,10 @@ import '../ikvpack_core.dart';
 final _connections = <String, Database>{}; // Path, DB
 
 class Storage implements StorageBase {
-  Storage(this.path);
-  final String path;
+  Storage(this._path);
+  @override
+  String get path => _path;
+  final String _path;
 
   bool _disposed = false;
 

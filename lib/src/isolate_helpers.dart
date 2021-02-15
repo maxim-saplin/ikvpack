@@ -34,7 +34,11 @@ class PooledInstance {
   final int _instanceId;
   final IsolatePool _pool;
   PooledInstance._(this._instanceId, this._pool, this.remoteCallback);
+
   Future<R> callRemoteMethod<R>(Action action) {
+    if (_pool.state == IsolatePoolState.stoped) {
+      throw 'Isolate pool has been stoped, cant call pooled instnace method';
+    }
     return _pool._sendRequest<R>(_instanceId, action);
   }
 
@@ -129,6 +133,9 @@ class IsolatePool {
   IsolatePool(this.numberOfIsolates);
 
   Future scheduleJob(PooledJob job) {
+    if (state == IsolatePoolState.stoped) {
+      throw 'Isolate pool has been stoped, cant schedule a job';
+    }
     _jobs.add(_PooledJobInternal(job, _jobs.length, -1));
     var completer = Completer();
     jobCompleters.add(completer);
@@ -320,7 +327,6 @@ class IsolatePool {
     }
   }
 
-  // TODO - deal with cases when calling methods on stopped instance
   void stop() {
     for (var i in _isolates) {
       i.kill();
