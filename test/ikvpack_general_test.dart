@@ -139,7 +139,7 @@ void main() async {
       expect(maxProgress, 100);
     }, testOn: 'vm');
 
-    test('IkvPack keysStartingWith() returns unique shadow keys', () async {
+    test('IkvPack keysStartingWith() returns shadow keys', () async {
       var m = <String, String>{
         'aaa': '_aaa',
         'Bbb': '_Bbb',
@@ -147,12 +147,14 @@ void main() async {
         'sdss': 'd'
       };
       var ikv = IkvPack.fromMap(m);
-      var matches = ikv.keysStartingWith('a', 100, true);
-      expect(matches.length, 1);
-      expect(matches[0], 'aaa');
-      matches = ikv.keysStartingWith('aa', 100, true);
-      expect(matches.length, 1);
-      expect(matches[0], 'aaa');
+      var matches = await ikv.keysStartingWith('a', 100);
+      expect(matches.length, 2);
+      expect(matches[0].shadow, 'aaa');
+      expect(matches[1].shadow, 'aaa');
+      matches = await ikv.keysStartingWith('aa', 100);
+      expect(matches.length, 2);
+      expect(matches[0].shadow, 'aaa');
+      expect(matches[1].shadow, 'aaa');
     });
   });
 

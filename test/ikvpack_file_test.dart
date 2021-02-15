@@ -171,14 +171,14 @@ void main() async {
         ik
       ];
 
-      var keys = IkvPack.consolidatedKeysStartingWith(ikvs, 'зьнізіць');
+      var keys = await IkvPack.consolidatedKeysStartingWith(ikvs, 'зьнізіць');
 // Shadow keys used in case-insensitive, original key in sensitive, that's why same values are returned
 // [0]:"зьнізіць"
 // [1]:"зьнізіць"
       expect(keys.length, 2);
       expect(keys[0], 'зьнізіць');
 
-      keys = IkvPack.consolidatedKeysStartingWith(ikvs, 'b', 10);
+      keys = await IkvPack.consolidatedKeysStartingWith(ikvs, 'b', 10);
       expect(keys.length, 10);
     }, skip: false);
 

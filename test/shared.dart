@@ -71,13 +71,13 @@ void runCaseInvariantTests() {
     expect(compressed[compressed.length - 1], v[compressed.length - 1]);
   });
 
-  test('keysStartingWith() finds the key', () {
-    var keys = _ikv.keysStartingWith('aerosol', 3);
-    expect(keys[0], 'aerosol bomb');
+  test('keysStartingWith() finds the key', () async {
+    var keys = await _ikv.keysStartingWith('aerosol', 3);
+    expect(keys[0].original, 'aerosol bomb');
   });
 
-  test('Key in keysStartingWith() is trimmed', () {
-    var keys = _ikv.keysStartingWith(' Acer ', 1);
+  test('Key in keysStartingWith() is trimmed', () async {
+    var keys = await _ikv.keysStartingWith(' Acer ', 1);
     expect(keys.length, 1);
   });
 
@@ -108,67 +108,70 @@ void runCaseInsensitiveTests() {
     expect(_ikv.keys[_ikv.keys.length - 1] == 'яскравасьць', true);
   });
 
-  test('Key keysStartingWith() limits the result', () {
-    var keys = _ikv.keysStartingWith('an', 3);
+  test('Key keysStartingWith() limits the result', () async {
+    var keys = await _ikv.keysStartingWith('an', 3);
     expect(keys.length, 3);
   });
 
-  test('Key keysStartingWith() conducts case-insensitive search', () {
-    var keys = _ikv.keysStartingWith('ЗЬ');
+  test('Key keysStartingWith() conducts case-insensitive search', () async {
+    var keys = await _ikv.keysStartingWith('ЗЬ');
     expect(keys.length, 6);
   });
 
   test(
       'Key keysStartingWith() search cases insesitive keys but returns original keys',
-      () {
-    var keys = _ikv.keysStartingWith('неглижэ');
-    expect(keys[0], 'негліжэ');
+      () async {
+    var keys = await _ikv.keysStartingWith('неглижэ');
+    expect(keys[0].original, 'негліжэ');
   });
 
-  test('"и" and "i" subsitute wroks when looking up Belarusian words', () {
-    var keys = _ikv.keysStartingWith('ихтыёл');
+  test('"и" and "i" subsitute wroks when looking up Belarusian words',
+      () async {
+    var keys = await _ikv.keysStartingWith('ихтыёл');
     expect(keys.length, 1);
   });
 
   test('"и" and "i" subsitute wroks when getting value by original key',
       () async {
-    var keys = _ikv.keysStartingWith('ихтыёл');
+    var keys = await _ikv.keysStartingWith('ихтыёл');
     expect(keys.length, 1);
-    var val = await _ikv[keys[0]];
+    var val = await _ikv[keys[0].original];
     expect(val, '<div>ихтиол</div>');
   });
 
-  test('Consolidated keysStartingWith works on case-insensitive keys', () {
+  test('Consolidated keysStartingWith works on case-insensitive keys',
+      () async {
     var m = <String, String>{'': '', 'wew': 'dsdsd', 'sss': '', 'sdss': 'd'};
     var ik = IkvPack.fromMap(m);
     var ikvs = [_ikv, _ikv, ik];
 
-    var keys = IkvPack.consolidatedKeysStartingWith(ikvs, 'зьнізіць');
+    var keys = await IkvPack.consolidatedKeysStartingWith(ikvs, 'зьнізіць');
 
     expect(keys.length, 1);
     expect(keys[0], 'зьнізіць');
 
-    keys = IkvPack.consolidatedKeysStartingWith(ikvs, 'b', 10);
+    keys = await IkvPack.consolidatedKeysStartingWith(ikvs, 'b', 10);
     expect(keys.length, 10);
   });
 
   test(
       'Consolidated keysStartingWith() doesn\'t fail for exact single key (bug fix)',
-      () {
+      () async {
     var m = <String, String>{'': '', 'wew': 'dsdsd', 'sss': '', 'sdss': 'd'};
     var ik = IkvPack.fromMap(m);
     var ikvs = [_ikv, ik];
 
-    var keys = IkvPack.consolidatedKeysStartingWith(ikvs, 'north by east');
+    var keys =
+        await IkvPack.consolidatedKeysStartingWith(ikvs, 'north by east');
     expect(keys.length, 1);
   });
 
-  test('Consolidated keysStartingWith returns original keys', () {
+  test('Consolidated keysStartingWith returns original keys', () async {
     var m = <String, String>{'': '', 'Wew': 'dsdsd', 'sss': '', 'sdss': 'd'};
     var ik = IkvPack.fromMap(m);
     var ikvs = [_ikv, _ikv, ik];
 
-    var keys = IkvPack.consolidatedKeysStartingWith(ikvs, 'w');
+    var keys = await IkvPack.consolidatedKeysStartingWith(ikvs, 'w');
     expect(keys.contains('Wew'), true);
   });
 }

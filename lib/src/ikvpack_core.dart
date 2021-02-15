@@ -17,29 +17,24 @@ import 'storage_impl/storage_vm.dart'
 part 'ikvpack_storage.dart';
 part 'ikvpack_isolates.dart';
 
-/// IkvPack abstract class provides inreface to a certain implementations
-/// of the class. There're currently 2 implementations, IkvPackImpl and IkvPackProxy.
-/// The former is the actual implementation of IkvPack features, the latter
-/// creates IkvPackImpl istances in isolates under isloate pool and
-/// communicates with them across isolate boundaries via sort of RPC - this
-/// is required for the cases when multiple large IkvPacks need to be quickly created.
-/// Simply creating IkvPack in spawned isolate and returning it to main one proved
-/// to be very slow due to siginificant overhead when serializing the whole object
 abstract class IkvPack {
-  StorageBase? get storage;
-
   UnmodifiableListView<String> get keys;
   UnmodifiableListView<String> get shadowKeys;
   UnmodifiableListView<KeyBasket> get keyBaskets;
 
-  List<String> get _kswOriginalKeys;
-
+  StorageBase? get storage;
   bool get keysCaseInsensitive;
   bool get shadowKeysUsed;
+
+  /// Default constructor reads keys into memory while access file (or Indexed DB in Web)
+  /// when a value is needed. fromMap() constructor stores everythin in memory
   bool get valuesInMemory;
 
   bool get noOutOfOrderFlag;
   bool get noUpperCaseFlag;
+
+  int get length;
+  int get sizeBytes;
 
   Future<void> saveTo(String path,
       [Function(int progressPercent)? updateProgress]);
@@ -64,12 +59,11 @@ abstract class IkvPack {
 
   int indexOf(String key);
 
-  List<String> keysStartingWith(String key,
-      [int maxResults = 100, bool returnShadowKeys = false]);
-
-  int get length;
-
-  int get sizeBytes;
+  /// Efficiently search keys that start with given srting. if keysCaseInsensitive == true
+  /// than use lower case shadow keys for comparisons - in this case there can be 2+ different
+  /// original keys while when kower case thay will be the same (e.g. Aa and aA are both aa when lower case, JIC original keys are always unique, shadow keys are not guaranteed)
+  /// Pairs are returned, the first value is the original key, the second one - shadow key
+  Future<List<KeyPair>> keysStartingWith(String key, [int maxResults = 100]);
 
   void dispose();
 
@@ -83,35 +77,31 @@ abstract class IkvPack {
   /// Helper methods that searches for keys in a number of packs
   /// and returns a unique set of keys. If keysCaseInsesitive, shadow
   /// versions are used for matches, but original keys are returned
-  static List<String> consolidatedKeysStartingWith(
+  static Future<List<String>> consolidatedKeysStartingWith(
       Iterable<IkvPack> packs, String value,
-      [int maxResults = 100]) {
+      [int maxResults = 100]) async {
     // var sw = Stopwatch();
     // sw.start();
     var matches = <String>[];
 
     var max2 = maxResults;
-    var tuples = <Tupple<String, String>>[];
+    var pairs = <KeyPair>[];
 
     for (var p in packs) {
-      var i = 0;
-      tuples.addAll(
-          p.keysStartingWith(value, max2, p.keysCaseInsensitive).map((e) {
-        return Tupple(e, p.keysCaseInsensitive ? p._kswOriginalKeys[i++] : e);
-      }));
-      if (tuples.length > maxResults) max2 = (maxResults / 2).floor();
-      if (tuples.length > 3 * maxResults) max2 = (maxResults / 2).floor();
+      pairs.addAll(await p.keysStartingWith(value, max2));
+      if (pairs.length > maxResults) max2 = (maxResults / 2).floor();
+      if (pairs.length > 3 * maxResults) max2 = (maxResults / 2).floor();
     }
 
-    if (tuples.isNotEmpty) {
-      tuples = _distinct(tuples);
+    if (pairs.isNotEmpty) {
+      pairs = _distinctShadow(pairs);
 
-      if (tuples.length > maxResults) {
-        tuples = tuples.sublist(0, min(maxResults, tuples.length));
+      if (pairs.length > maxResults) {
+        pairs = pairs.sublist(0, min(maxResults, pairs.length));
       }
 
       //recover original keys
-      matches = tuples.map((e) => e.item2).toList();
+      matches = pairs.map((e) => e.original).toList();
     }
 
     return matches;
@@ -314,6 +304,13 @@ abstract class IkvPack {
     return completer.future;
   }
 
+  static Future<IkvPack> loadInIsolatePoolAndUseProxy(
+      IsolatePool pool, String path,
+      [keysCaseInsensitive = true]) {
+    return IkvPackProxy.loadInIsolatePoolAndUseProxy(
+        pool, path, keysCaseInsensitive);
+  }
+
   static Future<IkvPack> load(String path, [keysCaseInsensitive = true]) {
     return IkvPackImpl.load(path, keysCaseInsensitive);
   }
@@ -327,6 +324,20 @@ class IkvPackImpl implements IkvPack {
   bool _shadowKeysUsed = false;
   @override
   bool get shadowKeysUsed => _shadowKeysUsed;
+
+  @override
+  bool get valuesInMemory => _valuesInMemory;
+  final bool _valuesInMemory;
+
+  @override
+  bool get noOutOfOrderFlag =>
+      storage != null ? storage!.noOutOfOrderFlag : false;
+  @override
+  bool get noUpperCaseFlag =>
+      storage != null ? storage!.noUpperCaseFlag : false;
+
+  @override
+  int get length => _originalKeys.length;
 
   IkvPackImpl._(String path, [this._keysCaseInsensitive = true])
       : _valuesInMemory = false,
@@ -407,7 +418,6 @@ class IkvPackImpl implements IkvPack {
   /// with 'е' (code 1077)
   @override
   bool get keysCaseInsensitive => _keysCaseInsensitive;
-
   final bool _keysCaseInsensitive;
 
   List<String> _originalKeys = [];
@@ -425,23 +435,6 @@ class IkvPackImpl implements IkvPack {
   @override
   UnmodifiableListView<KeyBasket> get keyBaskets =>
       UnmodifiableListView<KeyBasket>(_keyBaskets);
-
-  /// Web implementation does not support indexed keys
-  //bool get indexedKeys => true;
-
-  final bool _valuesInMemory;
-
-  /// Default constructor reads keys into memory while access file (or Indexed DB in Web)
-  /// when a value is needed. fromMap() constructor stores everythin in memory
-  @override
-  bool get valuesInMemory => _valuesInMemory;
-
-  @override
-  bool get noOutOfOrderFlag =>
-      storage != null ? storage!.noOutOfOrderFlag : false;
-  @override
-  bool get noUpperCaseFlag =>
-      storage != null ? storage!.noUpperCaseFlag : false;
 
   /// String values are compressed via Zlib, stored that way and are decompresed when values fetched
   /// map - the source for Keys/Values
@@ -655,9 +648,6 @@ class IkvPackImpl implements IkvPack {
     return result;
   }
 
-  @override
-  int get length => _originalKeys.length;
-
   @pragma('vm:prefer-inline')
   @pragma('dart2js:tryInline')
   @override
@@ -735,21 +725,17 @@ class IkvPackImpl implements IkvPack {
 
     var fl = key[0].codeUnits[0];
 
-    //var it = 0;
-
     for (var b in _keyBaskets) {
       if (b.firstLetter == fl) {
         var l = b.startIndex;
         var r = b.endIndex;
         while (l <= r) {
-          //it++;
           var m = (l + (r - l) / 2).round();
 
           var res = key.compareTo(list[m]);
 
           // Check if x is present at mid
           if (res == 0) {
-            //print('  --it ${it}');
             return m;
           }
 
@@ -797,18 +783,9 @@ class IkvPackImpl implements IkvPack {
     return l < r ? l : r;
   }
 
-// Used by consolidated lookup to recover original keys
   @override
-  List<String> get _kswOriginalKeys => __kswOriginalKeys;
-  final List<String> __kswOriginalKeys = [];
-
-  /// Efficiently search keys that start with given srting. if keysCaseInsensitive == true
-  /// than use lower case shadow keys for comparisons - in this case there can be 2+ different
-  /// original keys while when kower case thay will be the same (e.g. Aa and aA are both aa when lower case, JIC original keys are always unique, shadow keys are not guaranteed)
-  @override
-  List<String> keysStartingWith(String key,
-      [int maxResults = 100, bool returnShadowKeys = false]) {
-    //var keys = <String>[];
+  Future<List<KeyPair>> keysStartingWith(String key,
+      [int maxResults = 100]) async {
     var list = _originalKeys;
     key = key.trim();
 
@@ -825,8 +802,7 @@ class IkvPackImpl implements IkvPack {
 
     var fl = key[0].codeUnits[0];
 
-    var result = <String>[];
-    _kswOriginalKeys.clear();
+    var result = <KeyPair>[];
 
     for (var b in _keyBaskets) {
       if (b.firstLetter == fl) {
@@ -842,12 +818,10 @@ class IkvPackImpl implements IkvPack {
         var prevK = '';
         for (i; i <= endIndex; i++) {
           if (list[i].startsWith(key)) {
-            var k = _shadowKeysUsed && returnShadowKeys
-                ? _shadowKeys[i]
-                : _originalKeys[i];
+            var k = _originalKeys[i];
             if (k != prevK) {
-              result.add(k);
-              if (returnShadowKeys) _kswOriginalKeys.add(_originalKeys[i]);
+              result.add(KeyPair(k, shadowKeysUsed ? _shadowKeys[i] : ''));
+
               prevK = k;
             }
             if (result.length >= maxResults) {
@@ -943,21 +917,27 @@ class IkvPackImpl implements IkvPack {
   }
 }
 
-class Tupple<T1, T2> {
+class Tuple<T1, T2> {
   final T1 item1;
   final T2 item2;
 
-  Tupple(this.item1, this.item2);
+  Tuple(this.item1, this.item2);
 }
 
-List<Tupple<String, String>> _distinct(List<Tupple<String, String>> list) {
+class KeyPair {
+  final String original;
+  final String shadow;
+  KeyPair(this.original, this.shadow);
+}
+
+List<KeyPair> _distinctShadow(List<KeyPair> list) {
   if (list.isEmpty) return list;
-  list.sort((a, b) => a.item1.compareTo(b.item1));
-  var unique = <Tupple<String, String>>[];
+  list.sort((a, b) => a.original.compareTo(b.shadow));
+  var unique = <KeyPair>[];
   unique.add(list[0]);
 
   for (var i = 0; i < list.length; i++) {
-    if (list[i].item1 != unique.last.item1) {
+    if (list[i].shadow != unique.last.shadow) {
       unique.add(list[i]);
     }
   }

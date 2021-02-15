@@ -1,29 +1,115 @@
 part of ikvpack_core;
 
 class IkvPackInstanceWorker extends PooledInstanceWorker {
+  late IkvPack _ikv;
+
   @override
-  Future init() {
-    // TODO: implement init
-    throw UnimplementedError();
+  Future init() async {
+    return;
   }
 
   @override
-  Future receiveRemoteCall(Action action) {
-    // TODO: implement receiveRemoteCall
-    throw UnimplementedError();
+  Future<dynamic> receiveRemoteCall(Action action) async {
+    switch (action.runtimeType) {
+      case LoadAction:
+        var ac = action as LoadAction;
+        _ikv = await IkvPack.load(ac.path, ac.keysCaseInsensitive);
+        var r = LoadActionResult(_ikv.length, _ikv.sizeBytes,
+            _ikv.shadowKeysUsed, _ikv.noOutOfOrderFlag, _ikv.noUpperCaseFlag);
+        return r;
+      case GetRangeAction:
+        var ac = action as GetRangeAction;
+        var r = _ikv.getRange(ac.startIndex, ac.endIndex);
+        return r;
+      default:
+        throw 'Unknow action ${action.runtimeType}';
+    }
   }
 }
 
+class LoadActionResult {
+  final int length;
+  final int sizeBytes;
+  final bool shadowKeysUsed;
+  final bool noOutOfOrderFlag;
+  final bool noUpperCaseFlag;
+
+  LoadActionResult(this.length, this.sizeBytes, this.shadowKeysUsed,
+      this.noOutOfOrderFlag, this.noUpperCaseFlag);
+}
+
+class LoadAction extends Action {
+  final String path;
+  final bool keysCaseInsensitive;
+
+  LoadAction(this.path, this.keysCaseInsensitive);
+}
+
+class GetRangeAction extends Action {
+  final int? startIndex;
+  final int? endIndex;
+
+  GetRangeAction(this.startIndex, this.endIndex);
+}
+
 class IkvPackProxy implements IkvPack {
+  IkvPackProxy._(String path, [this._keysCaseInsensitive = true])
+      : _valuesInMemory = false;
+
   late PooledInstance _pi;
 
-  @override
-  Future<String> operator [](String key) {
-    throw UnimplementedError();
+  static Future<IkvPack> loadInIsolatePoolAndUseProxy(
+      IsolatePool pool, String path,
+      [keysCaseInsensitive = true]) async {
+    var ikv = IkvPackProxy._(path, keysCaseInsensitive);
+    ikv._pi = await pool.createInstance(IkvPackInstanceWorker());
+
+    var r = await ikv._pi.callRemoteMethod<LoadActionResult>(
+        LoadAction(path, keysCaseInsensitive));
+    ikv._valuesInMemory = false;
+    ikv._length = r.length;
+    ikv._sizeBytes = r.sizeBytes;
+    ikv._shadowKeysUsed = r.shadowKeysUsed;
+    ikv._noOutOfOrderFlag = r.noOutOfOrderFlag;
+    ikv._noUpperCaseFlag = r.noUpperCaseFlag;
+
+    return ikv;
   }
 
+  final bool _keysCaseInsensitive;
   @override
-  List<String> get _kswOriginalKeys => throw UnimplementedError();
+  bool get keysCaseInsensitive => _keysCaseInsensitive;
+
+  bool _shadowKeysUsed = false;
+  @override
+  bool get shadowKeysUsed => _shadowKeysUsed;
+
+  bool _valuesInMemory = false;
+  @override
+  bool get valuesInMemory => _valuesInMemory;
+
+  bool _noOutOfOrderFlag = false;
+  @override
+  bool get noOutOfOrderFlag => _noOutOfOrderFlag;
+
+  bool _noUpperCaseFlag = false;
+  @override
+  bool get noUpperCaseFlag => _noUpperCaseFlag;
+
+  int _length = -1;
+  @override
+  int get length => _length;
+
+  int _sizeBytes = -1;
+  @override
+  int get sizeBytes => _sizeBytes;
+
+  @pragma('vm:prefer-inline')
+  @pragma('dart2js:tryInline')
+  @override
+  Future<String> operator [](String key) async {
+    return value(key);
+  }
 
   @override
   bool containsKey(String key) {
@@ -31,12 +117,15 @@ class IkvPackProxy implements IkvPack {
   }
 
   @override
-  void dispose() {}
+  void dispose() {
+    throw UnimplementedError();
+  }
 
   @override
   Future<LinkedHashMap<String, String>> getRange(
       int? startIndex, int? endIndex) {
-    throw UnimplementedError();
+    return _pi.callRemoteMethod<LinkedHashMap<String, String>>(
+        GetRangeAction(startIndex, endIndex));
   }
 
   @override
@@ -62,22 +151,10 @@ class IkvPackProxy implements IkvPack {
   UnmodifiableListView<String> get keys => throw UnimplementedError();
 
   @override
-  bool get keysCaseInsensitive => throw UnimplementedError();
-
-  @override
-  List<String> keysStartingWith(String key,
+  Future<List<KeyPair>> keysStartingWith(String key,
       [int maxResults = 100, bool returnShadowKeys = false]) {
     throw UnimplementedError();
   }
-
-  @override
-  int get length => throw UnimplementedError();
-
-  @override
-  bool get noOutOfOrderFlag => throw UnimplementedError();
-
-  @override
-  bool get noUpperCaseFlag => throw UnimplementedError();
 
   @override
   Future<void> saveTo(String path,
@@ -87,12 +164,6 @@ class IkvPackProxy implements IkvPack {
 
   @override
   UnmodifiableListView<String> get shadowKeys => throw UnimplementedError();
-
-  @override
-  bool get shadowKeysUsed => throw UnimplementedError();
-
-  @override
-  int get sizeBytes => throw UnimplementedError();
 
   @override
   StorageBase? get storage => throw UnimplementedError();
@@ -116,9 +187,6 @@ class IkvPackProxy implements IkvPack {
   Future<Uint8List> valueRawCompressedAt(int index) {
     throw UnimplementedError();
   }
-
-  @override
-  bool get valuesInMemory => throw UnimplementedError();
 }
 
 class _IsolateParams {

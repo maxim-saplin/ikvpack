@@ -210,7 +210,7 @@ List<KeyBasket> readKeyBaskets(ByteData data, Headers headers) {
   return baskets;
 }
 
-Tupple<IkvPackData, List<Uint8List>> parseBinary(
+Tuple<IkvPackData, List<Uint8List>> parseBinary(
     ByteData data, bool getShadowKeys) {
   var headers = Headers.fromBytes(data);
   headers.validate(data.lengthInBytes);
@@ -242,7 +242,7 @@ Tupple<IkvPackData, List<Uint8List>> parseBinary(
     throw 'Invalid data, number of values read doesnt match number in headers';
   }
 
-  var result = Tupple(IkvPackData(keys, shadowKeys, baskets), values);
+  var result = Tuple(IkvPackData(keys, shadowKeys, baskets), values);
 
   return result;
 }
