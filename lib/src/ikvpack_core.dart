@@ -17,6 +17,12 @@ import 'storage_impl/storage_vm.dart'
 part 'ikvpack_storage.dart';
 part 'ikvpack_isolates.dart';
 
+/// IkvPack provides API to work with string Key/Value pairs, serilizing/deserilizing
+/// the data using files (dartVM) and IndexedDB(Web).
+/// There're currently 2 implementations: IkvPackImpl and IkvPackProxy.
+/// Factory methods within IkvPack allow creating both variants.
+/// IkvPackImpl contains the actual logic behind IkvPack APIs and work with both Web and Native apps.
+
 abstract class IkvPack {
   UnmodifiableListView<String> get keys;
   UnmodifiableListView<String> get shadowKeys;
@@ -63,6 +69,8 @@ abstract class IkvPack {
   /// than use lower case shadow keys for comparisons - in this case there can be 2+ different
   /// original keys while when kower case thay will be the same (e.g. Aa and aA are both aa when lower case, JIC original keys are always unique, shadow keys are not guaranteed)
   /// Pairs are returned, the first value is the original key, the second one - shadow key
+  /// IkvPackProxy (created via loadInIsolatePoolAndUseProxy) uses IsolatePool to create IkvPackImpl in separate isolates and
+  /// communicates with them across isolate boundaries via sort of RPC.
   Future<List<KeyPair>> keysStartingWith(String key, [int maxResults = 100]);
 
   void dispose();
@@ -87,10 +95,29 @@ abstract class IkvPack {
     var max2 = maxResults;
     var pairs = <KeyPair>[];
 
+    var i = 0;
+    const step = 12;
+    var futures = <Future<List<KeyPair>>>[];
+
     for (var p in packs) {
-      pairs.addAll(await p.keysStartingWith(value, max2));
-      if (pairs.length > maxResults) max2 = (maxResults / 2).floor();
-      if (pairs.length > 3 * maxResults) max2 = (maxResults / 2).floor();
+      futures.add(p.keysStartingWith(value, max2));
+      i++;
+      if (i >= step) {
+        i = 0;
+        var pp = await Future.wait<List<KeyPair>>(futures);
+        futures.clear();
+        for (var p in pp) {
+          pairs.addAll(p);
+        }
+        if (pairs.length > maxResults) max2 = (maxResults / 2).floor();
+        if (pairs.length > 3 * maxResults) max2 = (maxResults / 2).floor();
+      }
+    }
+
+    var pp = await Future.wait<List<KeyPair>>(futures);
+    futures.clear();
+    for (var p in pp) {
+      pairs.addAll(p);
     }
 
     if (pairs.isNotEmpty) {

@@ -21,8 +21,7 @@ void main() async {
     runCaseInsensitiveTests(true);
     test('Files size is properly returned', () async {
       expect(
-          (await IkvPackProxy.loadInIsolatePoolAndUseProxy(
-                  pool, 'test/testIkv.dat'))
+          (await IkvPack.loadInIsolatePoolAndUseProxy(pool, 'test/testIkv.dat'))
               .sizeBytes,
           269324);
     });

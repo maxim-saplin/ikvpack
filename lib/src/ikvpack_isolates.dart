@@ -135,6 +135,14 @@ class ValueRawConpressedAtAction extends Action {
   ValueRawConpressedAtAction(this.index);
 }
 
+/// IkvPackProxy uses IsolatePool to create IkvPackImpl in separate isolates and
+/// communicates with them across isolate boundaries via sort of RPC.
+/// This approach boost performance for when multiple large IkvPacks need to be quickly loaded for file.
+/// Simply loading IkvPack (40+NBs, 100k+ keys) in spawned isolate and returning it to main one proved
+/// to be very slow due to siginificant overhead when serializing the whole object.
+/// Also in Flutter apps when IkvPack was transmitted back from and Isolate
+/// the main thread could hang for second or two which lead to noticable UI freezes.
+/// Please not that not all APIs of IkvPack are implemented
 class IkvPackProxy implements IkvPack {
   IkvPackProxy._(String path, [this._keysCaseInsensitive = true])
       : _valuesInMemory = false;
