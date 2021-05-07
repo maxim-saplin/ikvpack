@@ -192,13 +192,13 @@ void runFileAndIsolateTests() {
 
     for (var i = 0; i < 20; i++) {
       var ik = IkvPack.fromMap(m);
-      await ik.saveTo('tmp/test_isol${i}.dat');
+      await ik.saveTo('tmp/test_isol$i.dat');
     }
 
     var futures = <Future<IkvPack>>[];
 
     for (var i = 0; i < 20; i++) {
-      futures.add(IkvPack.loadInIsolatePool(pool, 'tmp/test_isol${i}.dat'));
+      futures.add(IkvPack.loadInIsolatePool(pool, 'tmp/test_isol$i.dat'));
     }
 
     var res = await Future.wait(futures);
@@ -209,7 +209,7 @@ void runFileAndIsolateTests() {
       expect(res[i].length, 3);
       expect(await res[i]['c'], 'ccc');
       res[i].dispose();
-      IkvPack.delete('tmp/test_isol${i}.dat');
+      IkvPack.delete('tmp/test_isol$i.dat');
     }
   }, timeout: Timeout(Duration(seconds: 10)), onPlatform: {
     'windows': [

@@ -31,7 +31,7 @@ void main() async {
     Future<int> loadIkv100(String path, bool keysCaseInsensitive,
         [ikv100.IsolatePool? pool]) async {
       var ikv = pool == null
-          ? await ikv100.IkvPack(path, keysCaseInsensitive)
+          ? ikv100.IkvPack(path, keysCaseInsensitive)
           : await ikv100.IkvPack.loadInIsolatePool(pool, path);
 
       return ikv.length;
@@ -115,15 +115,15 @@ void main() async {
     test('Case-Sensitive, Current version not slower to load', () async {
       print('Warming up');
 
-      await await _benchmark(() => loadCurr(ruFileCurr, false), 2, 1);
-      await await _benchmark(() => loadIkv200(ruFile200, false), 2, 1);
-      await await _benchmark(() => loadIkv100(ruFile100, false), 2, 1);
+      await _benchmark(() => loadCurr(ruFileCurr, false), 2, 1);
+      await _benchmark(() => loadIkv200(ruFile200, false), 2, 1);
+      await _benchmark(() => loadIkv100(ruFile100, false), 2, 1);
 
       print('Testing...');
       var currentRuSense =
-          await await _benchmark(() => loadCurr(ruFileCurr, false), 6, 1);
+          await _benchmark(() => loadCurr(ruFileCurr, false), 6, 1);
       var ikv200RuSense =
-          await await _benchmark(() => loadIkv200(ruFile200, false), 6, 1);
+          await _benchmark(() => loadIkv200(ruFile200, false), 6, 1);
       var ikv100RuSense =
           await _benchmark(() => loadIkv100(ruFile100, false), 6, 1);
       var currentEnSense =
@@ -461,8 +461,8 @@ void main() async {
         utf16length += utf16bytes.last.length * 2;
       }
 
-      print('utf8  length: ${utf8length}');
-      print('utf16 length: ${utf16length}');
+      print('utf8  length: $utf8length');
+      print('utf16 length: $utf16length');
 
       var decoder = Utf8Decoder(allowMalformed: true);
 

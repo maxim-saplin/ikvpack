@@ -196,7 +196,7 @@ class IsolatePool {
   double _avgMicroseconds = 0;
 
   Future start() async {
-    print('Creating a pool of ${numberOfIsolates} running isolates');
+    print('Creating a pool of $numberOfIsolates running isolates');
 
     _isolatesStarted = 0;
     // ignore: omit_local_variable_types
@@ -241,7 +241,7 @@ class IsolatePool {
 
     spawnSw.stop();
 
-    print('spawn() called on ${numberOfIsolates} isolates'
+    print('spawn() called on $numberOfIsolates isolates'
         '(${spawnSw.elapsedMicroseconds} microseconds)');
 
     return last.future;
@@ -271,7 +271,7 @@ class IsolatePool {
     if (_isolatesStarted == numberOfIsolates) {
       _avgMicroseconds /= numberOfIsolates;
       print('Avg time to complete starting an isolate is '
-          '${_avgMicroseconds} microseconds');
+          '$_avgMicroseconds microseconds');
       last.complete();
       _started.complete();
       _state = IsolatePoolState.started;
@@ -290,11 +290,11 @@ class IsolatePool {
 
   Future<R> _sendRequest<R>(int instanceId, Action action) {
     if (!_pooledInstances.containsKey(instanceId)) {
-      throw 'Cant send request to non-existing instance, instanceId ${instanceId}';
+      throw 'Cant send request to non-existing instance, instanceId $instanceId';
     }
     var pim = _pooledInstances[instanceId]!;
     if (pim.state == _PooledInstanceStatus.starting) {
-      throw 'Cant send request to instance in Starting state, instanceId ${instanceId}';
+      throw 'Cant send request to instance in Starting state, instanceId $instanceId}';
     }
     var index = pim.isolateIndex;
     var request = _Request(instanceId, action);
