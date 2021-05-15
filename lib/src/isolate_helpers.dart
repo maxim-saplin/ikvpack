@@ -225,6 +225,10 @@ class IsolatePool {
       _isolates.add(isolate);
 
       receivePort.listen((data) {
+        if (_state == IsolatePoolState.stoped) {
+          print('Received isolate message when pool is already stopped');
+          return;
+        }
         if (data is _CreationResponse) {
           _processCreationResponse(data);
         } else if (data is _Request) {
@@ -280,6 +284,7 @@ class IsolatePool {
 
   void _processJobResult(_PooledJobResult result) {
     _isolateBusyWithJob[result.isolateIndex] = false;
+
     if (result.error == null) {
       jobCompleters[result.jobIndex].complete(result.result);
     } else {
@@ -327,6 +332,7 @@ class IsolatePool {
     }
   }
 
+  /// Throws if there're pending jobs or requests
   void stop() {
     for (var i in _isolates) {
       i.kill();
@@ -335,6 +341,8 @@ class IsolatePool {
           c.completeError('Isolate pool stopped upon request, cancelling jobs');
         }
       }
+      jobCompleters.clear();
+
       for (var c in creationCompleters.values) {
         if (!c.isCompleted) {
           c.completeError(
@@ -342,6 +350,7 @@ class IsolatePool {
         }
       }
       creationCompleters.clear();
+
       for (var c in _requestCompleters.values) {
         if (!c.isCompleted) {
           c.completeError(
