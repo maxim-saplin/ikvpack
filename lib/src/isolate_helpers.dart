@@ -1,5 +1,7 @@
 import 'dart:async';
+//import 'dart:html';
 import 'dart:isolate';
+import 'dart:io' as P;
 
 abstract class PooledJob<E> {
   Future<E> job();
@@ -195,8 +197,11 @@ class IsolatePool {
   // ignore: omit_local_variable_types
   double _avgMicroseconds = 0;
 
+  static final Uri _uri = Uri.parse(
+      'package:ikvpack/src/isolate_helpers.dart'); //P.Platform.script;
+
   Future start() async {
-    print('Creating a pool of ${numberOfIsolates} running isolates');
+    print('Creating a pool of $numberOfIsolates running isolates');
 
     _isolatesStarted = 0;
     // ignore: omit_local_variable_types
@@ -218,8 +223,14 @@ class IsolatePool {
       sw.start();
       var params = _PooledIsolateParams(receivePort.sendPort, i, sw);
 
-      var isolate = await Isolate.spawn<_PooledIsolateParams>(
-          _pooledIsolateBody, params,
+      // var isolate = await Isolate.spawn<_PooledIsolateParams>(
+      //     _pooledIsolateBody, params,
+      //     errorsAreFatal: false);
+
+      //print('URI ${_uri}');
+
+      var isolate = await Isolate.spawnUri(
+          _uri, [params.isolateIndex.toString()], params.sendPort,
           errorsAreFatal: false);
 
       _isolates.add(isolate);
@@ -394,6 +405,14 @@ class _PooledJobResult {
 }
 
 var _workerInstances = <int, PooledInstanceWorker>{};
+
+// For running in separate isolate group
+void main(args, message) {
+  print(args[0]);
+  var pip = _PooledIsolateParams(
+      message as SendPort, int.parse(args[0]), Stopwatch());
+  _pooledIsolateBody(pip);
+}
 
 void _pooledIsolateBody(_PooledIsolateParams params) async {
   params.stopwatch.stop();
