@@ -24,12 +24,12 @@ void runCaseInvariantTests([bool proxySkip = false]) {
   }, skip: proxySkip);
 
   test('Can get value by index', () async {
-    var v = await _ikv.valueAt(0);
+    var v = await _ikv.getValueAt(0);
     expect(
         v.startsWith(
             '<div><i>adjective</i></div><div>being six more than thirty'),
         true);
-    v = await _ikv.valueAt(1);
+    v = await _ikv.getValueAt(1);
     expect(
         v.startsWith(
             '<div><i>noun</i></div><div>United States politician who served'),
@@ -58,13 +58,13 @@ void runCaseInvariantTests([bool proxySkip = false]) {
   });
 
   test('Can get raw uncompressed value via index', () async {
-    var v = await _ikv.valueRawCompressed('зараць');
+    var v = await _ikv.getValueRawCompressed('зараць');
     expect(v.isNotEmpty, true);
     var index = _ikv.indexOf('зараць');
     var uncompressed = '<div>вспахать</div>';
     var utf = utf8.encode(uncompressed);
     var compressed = Deflate(utf).getBytes();
-    v = await _ikv.valueRawCompressedAt(index);
+    v = await _ikv.getValueRawCompressedAt(index);
     expect(v.isNotEmpty, true);
     expect(compressed.length, v.length);
     expect(compressed[0], v[0]);
@@ -72,12 +72,12 @@ void runCaseInvariantTests([bool proxySkip = false]) {
   }, skip: proxySkip);
 
   test('Can get raw uncompressed value via key', () async {
-    var v = await _ikv.valueRawCompressed('зараць');
+    var v = await _ikv.getValueRawCompressed('зараць');
     expect(v.isNotEmpty, true);
     var uncompressed = '<div>вспахать</div>';
     var utf = utf8.encode(uncompressed);
     var compressed = Deflate(utf).getBytes();
-    v = await _ikv.valueRawCompressed('зараць');
+    v = await _ikv.getValueRawCompressed('зараць');
     expect(v.isNotEmpty, true);
     expect(compressed.length, v.length);
     expect(compressed[0], v[0]);
@@ -97,7 +97,7 @@ void runCaseInvariantTests([bool proxySkip = false]) {
   test('Non existing keys return empty result', () async {
     expect(_ikv.containsKey('wewer'), false);
     expect(await _ikv['wewer'], '');
-    expect((await _ikv.valueRawCompressed('wewer')).isEmpty, true);
+    expect((await _ikv.getValueRawCompressed('wewer')).isEmpty, true);
   }, skip: proxySkip);
 }
 
