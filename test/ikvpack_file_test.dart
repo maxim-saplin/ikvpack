@@ -2,8 +2,6 @@
 
 import 'dart:io';
 import 'package:ikvpack/ikvpack.dart';
-import 'package:ikvpack/src/ikvpack_core.dart';
-import 'package:ikvpack/src/isolate_helpers.dart';
 import 'package:test/test.dart';
 
 import 'shared.dart';
