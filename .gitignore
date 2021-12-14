@@ -25,3 +25,5 @@ test/performance_data/100/EN_RU Multitran vol.2.dikt
 test/performance_data/100/RU_EN Multitran vol.2.dikt
 test/performance_data/200/RU_EN Multitran vol.2.dikt
 test/performance_data/200/EN_RU Multitran vol.2.dikt
+.DS_Store
+test/.DS_Store
