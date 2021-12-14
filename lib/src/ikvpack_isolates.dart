@@ -10,6 +10,7 @@ class IkvPackInstanceWorker extends PooledInstanceWorker {
 
   @override
   Future<dynamic> receiveRemoteCall(Action action) async {
+    //print('Isolate - Action received - ${action.runtimeType}');
     switch (action.runtimeType) {
       case LoadAction:
         var ac = action as LoadAction;
@@ -38,19 +39,19 @@ class IkvPackInstanceWorker extends PooledInstanceWorker {
         return r;
       case ValueAction:
         var ac = action as ValueAction;
-        var r = _ikv.value(ac.key);
+        var r = _ikv.getValue(ac.key);
         return r;
       case ValueAtAction:
         var ac = action as ValueAtAction;
-        var r = _ikv.valueAt(ac.index);
+        var r = _ikv.getValueAt(ac.index);
         return r;
       case ValueRawConpressedAction:
         var ac = action as ValueRawConpressedAction;
-        var r = _ikv.valueRawCompressed(ac.key);
+        var r = _ikv.getValueRawCompressed(ac.key);
         return r;
       case ValueRawConpressedAtAction:
         var ac = action as ValueRawConpressedAtAction;
-        var r = _ikv.valueRawCompressedAt(ac.index);
+        var r = _ikv.getValueRawCompressedAt(ac.index);
         return r;
       default:
         throw 'Unknow action ${action.runtimeType}';
@@ -207,7 +208,7 @@ class IkvPackProxy implements IkvPack {
   @pragma('dart2js:tryInline')
   @override
   Future<String> operator [](String key) async {
-    return value(key);
+    return getValue(key);
   }
 
   @override
@@ -275,22 +276,22 @@ class IkvPackProxy implements IkvPack {
   StorageBase? get storage => throw UnimplementedError();
 
   @override
-  Future<String> value(String key) {
+  Future<String> getValue(String key) {
     return _pi.callRemoteMethod<String>(ValueAction(key));
   }
 
   @override
-  Future<String> valueAt(int index) {
+  Future<String> getValueAt(int index) {
     return _pi.callRemoteMethod<String>(ValueAtAction(index));
   }
 
   @override
-  Future<Uint8List> valueRawCompressed(String key) {
+  Future<Uint8List> getValueRawCompressed(String key) {
     return _pi.callRemoteMethod<Uint8List>(ValueRawConpressedAction(key));
   }
 
   @override
-  Future<Uint8List> valueRawCompressedAt(int index) {
+  Future<Uint8List> getValueRawCompressedAt(int index) {
     return _pi.callRemoteMethod<Uint8List>(ValueRawConpressedAtAction(index));
   }
 }

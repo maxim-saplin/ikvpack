@@ -51,13 +51,13 @@ abstract class IkvPack {
   Future<LinkedHashMap<String, String>> getRange(
       int? startIndex, int? endIndex);
 
-  Future<String> valueAt(int index);
+  Future<String> getValueAt(int index);
 
-  Future<Uint8List> valueRawCompressedAt(int index);
+  Future<Uint8List> getValueRawCompressedAt(int index);
 
-  Future<Uint8List> valueRawCompressed(String key);
+  Future<Uint8List> getValueRawCompressed(String key);
 
-  Future<String> value(String key);
+  Future<String> getValue(String key);
 
   Future<String> operator [](String key);
 
@@ -636,11 +636,12 @@ class IkvPackImpl implements IkvPack {
 
     if (_storage != null && !_storage!.useIndexToGetValue) {
       for (var i = start; i <= end; i++) {
-        result[_originalKeys[i]] = await valueRawCompressed(_originalKeys[i]);
+        result[_originalKeys[i]] =
+            await getValueRawCompressed(_originalKeys[i]);
       }
     } else {
       for (var i = start; i <= end; i++) {
-        result[_originalKeys[i]] = await valueRawCompressedAt(i);
+        result[_originalKeys[i]] = await getValueRawCompressedAt(i);
       }
     }
 
@@ -664,11 +665,11 @@ class IkvPackImpl implements IkvPack {
 
     if (_storage != null && !_storage!.useIndexToGetValue) {
       for (var i = start; i <= end; i++) {
-        result[_originalKeys[i]] = await value(_originalKeys[i]);
+        result[_originalKeys[i]] = await getValue(_originalKeys[i]);
       }
     } else {
       for (var i = start; i <= end; i++) {
-        result[_originalKeys[i]] = await valueAt(i);
+        result[_originalKeys[i]] = await getValueAt(i);
       }
     }
 
@@ -678,7 +679,7 @@ class IkvPackImpl implements IkvPack {
   @pragma('vm:prefer-inline')
   @pragma('dart2js:tryInline')
   @override
-  Future<String> valueAt(int index) async {
+  Future<String> getValueAt(int index) async {
     var bytes = valuesInMemory
         ? Inflate(_values[index]).getBytes()
         : Inflate(_storage!.useIndexToGetValue
@@ -693,7 +694,7 @@ class IkvPackImpl implements IkvPack {
   @pragma('vm:prefer-inline')
   @pragma('dart2js:tryInline')
   @override
-  Future<Uint8List> valueRawCompressedAt(int index) async {
+  Future<Uint8List> getValueRawCompressedAt(int index) async {
     var bytes = valuesInMemory
         ? _values[index]
         : _storage!.useIndexToGetValue
@@ -706,26 +707,26 @@ class IkvPackImpl implements IkvPack {
   @pragma('vm:prefer-inline')
   @pragma('dart2js:tryInline')
   @override
-  Future<String> value(String key) async {
+  Future<String> getValue(String key) async {
     var index = indexOf(key);
     if (index < 0) return ''; //throw 'key not foiund';
 
     return _storage != null && !_storage!.useIndexToGetValue
         ? utf8.decode(Inflate(await _storage!.value(key)).getBytes(),
             allowMalformed: true)
-        : await valueAt(index);
+        : await getValueAt(index);
   }
 
   @pragma('vm:prefer-inline')
   @pragma('dart2js:tryInline')
   @override
-  Future<Uint8List> valueRawCompressed(String key) async {
+  Future<Uint8List> getValueRawCompressed(String key) async {
     var index = indexOf(key);
     if (index < 0) return Uint8List(0); //throw 'key not foiund';
 
     return _storage != null && !_storage!.useIndexToGetValue
         ? Uint8List.fromList(await _storage!.value(key))
-        : await valueRawCompressedAt(index);
+        : await getValueRawCompressedAt(index);
   }
 
   /// Returns decompressed value
@@ -733,7 +734,7 @@ class IkvPackImpl implements IkvPack {
   @pragma('dart2js:tryInline')
   @override
   Future<String> operator [](String key) async {
-    return value(key);
+    return getValue(key);
   }
 
   /// -1 if not found

@@ -128,7 +128,7 @@ Future<void> saveToPath(String path, IkvPackData data, List<Uint8List> values,
   var db = await _getDb(path, true);
   var canceled = false;
 
-  print('Inserting keys to IndexedDB ${path}');
+  print('Inserting keys to IndexedDB $path');
   try {
     if (updateProgress == null || data.originalKeys.length < 100) {
       await insert(db, data.originalKeys, values);

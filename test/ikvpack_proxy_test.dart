@@ -1,7 +1,6 @@
 @TestOn('vm')
 
 import 'package:ikvpack/ikvpack.dart';
-import 'package:ikvpack/src/ikvpack_core.dart';
 import 'package:test/test.dart';
 
 import 'shared.dart';
@@ -32,9 +31,9 @@ void main() async {
       var m = <String, String>{'': '', 'wew': 'dsdsd', 'sss': '', 'sdss': 'd'};
       var ik = IkvPack.fromMap(m);
       var ikvs = [
-        await await IkvPackProxy.loadInIsolatePoolAndUseProxy(
+        await IkvPackProxy.loadInIsolatePoolAndUseProxy(
             pool, 'test/testIkv.dat', true),
-        await await IkvPackProxy.loadInIsolatePoolAndUseProxy(
+        await IkvPackProxy.loadInIsolatePoolAndUseProxy(
             pool, 'test/testIkv.dat', false),
         ik
       ];
@@ -51,7 +50,7 @@ void main() async {
     });
 
     test('Flags are properly read from file', () async {
-      var ikv00 = await await IkvPackProxy.loadInIsolatePoolAndUseProxy(
+      var ikv00 = await IkvPackProxy.loadInIsolatePoolAndUseProxy(
           pool, 'test/testIkv.dat');
       expect(ikv00.noOutOfOrderFlag, false);
       expect(ikv00.noUpperCaseFlag, false);

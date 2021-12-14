@@ -11,7 +11,7 @@ class NumbersJob extends PooledJob<int> {
 
   @override
   Future<int> job() async {
-    print('Number ${number}');
+    print('Number $number');
     return number;
     //return Future<int>(() => number);
   }
@@ -24,8 +24,8 @@ class ThrowingNumbersJob extends PooledJob<int> {
 
   @override
   Future<int> job() async {
-    if (number % 2 == 0) throw 'Error on number ${number}';
-    print('Number ${number}');
+    if (number % 2 == 0) throw 'Error on number $number';
+    print('Number $number');
     return number;
   }
 }
