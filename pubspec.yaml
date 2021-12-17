@@ -1,6 +1,6 @@
 name: ikvpack
 description: A starting point for Dart libraries or applications.
-version: 3.0.2
+version: 3.0.3
 homepage: https://github.com/maxim-saplin/ikvpack
 
 environment:
