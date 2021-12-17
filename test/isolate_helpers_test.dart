@@ -17,6 +17,18 @@ class NumbersJob extends PooledJob<int> {
   }
 }
 
+class DoubleNumbersJob extends PooledJob<int> {
+  final int number;
+
+  DoubleNumbersJob(this.number);
+
+  @override
+  Future<int> job() async {
+    print('Number $number');
+    return number * 2;
+  }
+}
+
 class ThrowingNumbersJob extends PooledJob<int> {
   final int number;
 
@@ -127,6 +139,20 @@ void main() {
       }
 
       print(await Future.wait(futures));
+    });
+
+    test('Simple job returns correct result', () async {
+      var p = IsolatePool(4);
+      await p.start();
+
+      var futures = <Future>[];
+      futures.add(p.scheduleJob(DoubleNumbersJob(1)));
+      futures.add(p.scheduleJob(DoubleNumbersJob(2)));
+      var x = await p.scheduleJob<int>(DoubleNumbersJob(3));
+
+      expect(x, 6);
+      expect(await futures[0], 2);
+      expect(await futures[1], 4);
     });
 
     test(

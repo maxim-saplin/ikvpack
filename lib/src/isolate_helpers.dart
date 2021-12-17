@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:isolate';
 
+/// One-off operation queued and executed in isolate pool
 abstract class PooledJob<E> {
   Future<E> job();
 }
@@ -132,12 +133,12 @@ class IsolatePool {
 
   IsolatePool(this.numberOfIsolates);
 
-  Future scheduleJob(PooledJob job) {
+  Future<T> scheduleJob<T>(PooledJob job) {
     if (state == IsolatePoolState.stoped) {
       throw 'Isolate pool has been stoped, cant schedule a job';
     }
     _jobs.add(_PooledJobInternal(job, _jobs.length, -1));
-    var completer = Completer();
+    var completer = Completer<T>();
     jobCompleters.add(completer);
     _runJobWithVacantIsolate();
     return completer.future;
