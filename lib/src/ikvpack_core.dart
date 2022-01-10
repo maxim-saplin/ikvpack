@@ -120,6 +120,14 @@ abstract class IkvPack {
       pairs.addAll(p);
     }
 
+    // Considerations on key consolidation
+    // E.g. 'lucid' is looked up in 3 dictionaires (A, B and C) using shadow keys
+    // A has LUCID and lucid, A contains lucid, C has Lucid
+    // The current implementation will take whatever first original key there is
+    // and return. The problem with such approach is say LUCID is returned from
+    // the search and letter LUCID is used to get values from A, while a user
+    // is interested in both LUCIS and lucid, only one value will be returned
+
     if (pairs.isNotEmpty) {
       pairs = _distinctShadow(pairs);
 
