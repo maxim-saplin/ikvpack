@@ -444,7 +444,6 @@ class IkvPack {
     if (end < 0) throw 'endIndex can\'t be negative';
     if (end <= start) throw 'endIndex must be greater than startIndex';
 
-    // ignore: prefer_collection_literals
     var result = LinkedHashMap<String, Uint8List>();
 
     if (_storage != null && !_storage!.useIndexToGetValue) {
@@ -471,7 +470,6 @@ class IkvPack {
     if (end < 0) throw 'endIndex can\'t be negative';
     if (end <= start) throw 'endIndex must be greater than startIndex';
 
-    // ignore: prefer_collection_literals
     var result = LinkedHashMap<String, String>();
 
     if (_storage != null && !_storage!.useIndexToGetValue) {
@@ -825,8 +823,7 @@ abstract class StorageBase {
 }
 
 Tupple<List<String>, List<Uint8List>> parseBinary(ByteData data) {
-  // ignore: unused_local_variable
-  var flags = data.getInt32(0); //_readUint32(f, Endian.big);
+  //var flags = data.getInt32(0); //_readUint32(f, Endian.big);
   var length = data.getInt32(4);
   var offsetsOffset = data.getInt32(8);
   var valuesOffset = data.getInt32(12);

@@ -639,8 +639,8 @@ class IkvPackImpl implements IkvPack {
     if (end < 0) throw 'endIndex can\'t be negative';
     if (end <= start) throw 'endIndex must be greater than startIndex';
 
-    // ignore: prefer_collection_literals
-    var result = LinkedHashMap<String, Uint8List>();
+    LinkedHashMap<String, Uint8List> result =
+        LinkedHashMap<String, Uint8List>();
 
     if (_storage != null && !_storage!.useIndexToGetValue) {
       for (var i = start; i <= end; i++) {
@@ -668,8 +668,7 @@ class IkvPackImpl implements IkvPack {
     if (end < 0) throw 'endIndex can\'t be negative';
     if (end <= start) throw 'endIndex must be greater than startIndex';
 
-    // ignore: prefer_collection_literals
-    var result = LinkedHashMap<String, String>();
+    LinkedHashMap<String, String> result = LinkedHashMap<String, String>();
 
     if (_storage != null && !_storage!.useIndexToGetValue) {
       for (var i = start; i <= end; i++) {
@@ -894,12 +893,12 @@ class IkvPackImpl implements IkvPack {
       throw 'Cant get stats on non-file based IkvPack';
     }
 
-    var _headers = _storage!.headers;
+    var headers = _storage!.headers;
 
-    var keysNumber = _headers.count;
-    var keysBytes = _headers.offsetsOffset - 16 - _headers.count * 2;
+    var keysNumber = headers.count;
+    var keysBytes = headers.offsetsOffset - 16 - headers.count * 2;
     //var altKeysBytes = 0;
-    var valuesBytes = sizeBytes - _headers.valuesOffset;
+    var valuesBytes = sizeBytes - headers.valuesOffset;
     var keysTotalChars = _originalKeys.fold<int>(
         0, (previousValue, element) => previousValue + element.length);
 

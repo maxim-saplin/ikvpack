@@ -72,3 +72,5 @@ lcov/test/isolate_helpers_test.dart.vm.json
 lcov/test/isolate_pooled_instance_test.dart.vm.json
 lcov/test/performance_test.dart.vm.json
 lcov/test/web_test.dart.chrome.json
+.DS_Store
+test_versions/.DS_Store

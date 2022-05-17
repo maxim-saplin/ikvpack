@@ -130,46 +130,45 @@ late PooledInstance pib;
 
 void main() {
   test('Creating pooled instance succeeds', () async {
-    var _pool = IsolatePool(4);
-    await _pool.start();
-    var _ = await _pool.createInstance(WorkerA(), null);
-    expect(_pool.numberOfPooledInstances, 1);
+    var pool = IsolatePool(4);
+    await pool.start();
+    await pool.createInstance(WorkerA(), null);
+    expect(pool.numberOfPooledInstances, 1);
   });
 
   test('Creating multiple pooled instance succeeds', () async {
-    var _pool = IsolatePool(4);
-    await _pool.start();
+    var pool = IsolatePool(4);
+    await pool.start();
     for (var i = 0; i < 20; i++) {
-      var _ = await _pool.createInstance(WorkerA(), null);
+      await pool.createInstance(WorkerA(), null);
     }
-    expect(_pool.numberOfPooledInstances, 20);
+    expect(pool.numberOfPooledInstances, 20);
   });
 
   test('Creating different type pooled instance succeeds', () async {
-    var _pool = IsolatePool(4);
-    await _pool.start();
+    var pool = IsolatePool(4);
+    await pool.start();
     for (var i = 0; i < 20; i++) {
-      var _ =
-          await _pool.createInstance(i % 2 == 0 ? WorkerA() : WorkerB(), null);
+      await pool.createInstance(i % 2 == 0 ? WorkerA() : WorkerB(), null);
     }
-    expect(_pool.numberOfPooledInstances, 20);
+    expect(pool.numberOfPooledInstances, 20);
   });
 
   test('Instances are created in different isolates', () async {
-    var _pool = IsolatePool(4);
-    await _pool.start();
+    var pool = IsolatePool(4);
+    await pool.start();
     var instances = <PooledInstance>[];
     for (var i = 0; i < 20; i++) {
       var pi =
-          await _pool.createInstance(i % 2 == 0 ? WorkerA() : WorkerB(), null);
+          await pool.createInstance(i % 2 == 0 ? WorkerA() : WorkerB(), null);
       instances.add(pi);
     }
-    expect(_pool.numberOfPooledInstances, 20);
+    expect(pool.numberOfPooledInstances, 20);
 
     var pools = List<int>.filled(4, 0);
 
     for (var pi in instances) {
-      pools[_pool.indexOfPi(pi)]++;
+      pools[pool.indexOfPi(pi)]++;
     }
 
     for (var p in pools) {
@@ -178,22 +177,22 @@ void main() {
   });
 
   test('Can destroy pooled instances', () async {
-    var _pool = IsolatePool(4);
-    await _pool.start();
+    var pool = IsolatePool(4);
+    await pool.start();
     var instances = <PooledInstance>[];
     for (var i = 0; i < 5; i++) {
-      var pi = await _pool.createInstance(WorkerA(), null);
+      var pi = await pool.createInstance(WorkerA(), null);
       instances.add(pi);
     }
-    expect(_pool.numberOfPooledInstances, 5);
+    expect(pool.numberOfPooledInstances, 5);
 
-    _pool.destroyInstance(instances[0]);
-    expect(_pool.numberOfPooledInstances, 4);
+    pool.destroyInstance(instances[0]);
+    expect(pool.numberOfPooledInstances, 4);
 
     var err = '';
 
     try {
-      _pool.destroyInstance(instances[0]);
+      pool.destroyInstance(instances[0]);
     } catch (e) {
       err = e.toString();
     }
@@ -202,11 +201,11 @@ void main() {
   });
 
   test('Calling method with pool stopped is handled', () async {
-    var _pool = IsolatePool(4);
-    await _pool.start();
-    var pi = await _pool.createInstance(WorkerA(), null);
-    expect(_pool.numberOfPooledInstances, 1);
-    _pool.stop();
+    var pool = IsolatePool(4);
+    await pool.start();
+    var pi = await pool.createInstance(WorkerA(), null);
+    expect(pool.numberOfPooledInstances, 1);
+    pool.stop();
     var err = '';
     try {
       await pi.callRemoteMethod(SumIntAction(1, 1));
@@ -218,20 +217,20 @@ void main() {
   });
 
   test('Can stop while there\'re instances being created', () async {
-    var _pool = IsolatePool(5);
-    await _pool.start();
+    var pool = IsolatePool(5);
+    await pool.start();
 
     late Future f;
     var err = '';
 
     try {
       for (var i = 0; i < 25; i++) {
-        f = _pool.createInstance(WorkerA(), null);
+        f = pool.createInstance(WorkerA(), null);
         if (i < 24) await f;
       }
       //expect(_pool.numberOfPooledInstances, 0);
 
-      _pool.stop();
+      pool.stop();
       await f;
     } catch (e) {
       err = e.toString();
@@ -242,8 +241,8 @@ void main() {
   });
 
   test('Can stop while there\'re requests pending', () async {
-    var _pool = IsolatePool(5);
-    await _pool.start();
+    var pool = IsolatePool(5);
+    await pool.start();
 
     late Future f;
     late PooledInstance pi;
@@ -251,17 +250,17 @@ void main() {
 
     try {
       for (var i = 0; i < 25; i++) {
-        pi = await _pool.createInstance(WorkerA(), null);
+        pi = await pool.createInstance(WorkerA(), null);
       }
 
-      expect(_pool.numberOfPooledInstances, 25);
+      expect(pool.numberOfPooledInstances, 25);
 
       for (var i = 0; i < 25; i++) {
         f = pi.callRemoteMethod<int>(SumIntAction(i, 1));
         if (i < 24) await f;
       }
 
-      _pool.stop();
+      pool.stop();
       await f;
     } catch (e) {
       err = e.toString();
@@ -272,11 +271,11 @@ void main() {
   });
 
   test('Creating pooled instance with error', () async {
-    var _pool = IsolatePool(4);
-    await _pool.start();
+    var pool = IsolatePool(4);
+    await pool.start();
     var s = '';
     try {
-      var _ = await _pool.createInstance(WorkerA(true), null);
+      await pool.createInstance(WorkerA(true), null);
     } catch (e) {
       s = e.toString();
     }
@@ -305,7 +304,7 @@ void main() {
         completer.complete((a as CallbackAction).x);
         return a.x + 1;
       });
-      var _ = await pi.callRemoteMethod(CallbackIssuingAction(1));
+      await pi.callRemoteMethod(CallbackIssuingAction(1));
       var res = await completer.future;
       expect(res, 2);
       // the callback will be called twice from isolate, each time adding 1 to whatever it receives
@@ -315,7 +314,7 @@ void main() {
     });
 
     test('Call null callback from pooled instance', () async {
-      var _ = await pia.callRemoteMethod(CallbackIssuingAction(1));
+      await pia.callRemoteMethod(CallbackIssuingAction(1));
       //await Future.delayed(Duration(milliseconds: 10000), () => 0);
       // checked manualy debug output to see there's message 'Isolate pool received request to instance 0 which doesnt have callback intialized'
       expect(true, true); // No exceptions
@@ -349,7 +348,7 @@ void main() {
       var f1 = pia.callRemoteMethod(CallbackIssuingAction(1));
       var f2 = pia.callRemoteMethod(SumIntAction(1, 1));
 
-      var _ = await f1;
+      await f1;
       var x2 = await f2;
       expect(x2, 1.0 + 1.0);
     });
@@ -391,7 +390,7 @@ void main() {
         () async {
       var s = '';
       try {
-        var _ = await pib.callRemoteMethod<int>(SumDynamicAction('', ''));
+        await pib.callRemoteMethod<int>(SumDynamicAction('', ''));
       } catch (e) {
         s = e.toString();
       }

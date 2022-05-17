@@ -1,3 +1,5 @@
+// ignore_for_file: no_leading_underscores_for_local_identifiers
+
 @TestOn('vm')
 
 import 'package:ikvpack/ikvpack.dart';
@@ -219,7 +221,7 @@ void main() {
 
       var thrown = false;
       try {
-        var _ = await ci.run((arg) => called++);
+        await ci.run((arg) => called++);
       } catch (_) {
         thrown = true;
       }
@@ -242,7 +244,7 @@ void main() {
 
       var thrown = false;
       try {
-        var _ = await ci.run((arg) => called++);
+        await ci.run((arg) => called++);
       } catch (_) {
         thrown = true;
       }

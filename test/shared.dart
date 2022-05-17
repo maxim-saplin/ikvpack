@@ -5,7 +5,7 @@ import 'package:ikvpack/ikvpack.dart';
 import 'package:ikvpack/src/ikvpack_core.dart';
 import 'package:test/test.dart';
 
-import 'testBytes.dart';
+import 'test_bytes.dart';
 
 late IkvPack _ikv;
 

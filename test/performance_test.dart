@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:test/test.dart';
-import 'testMap.dart';
+import 'test_map.dart';
 import 'package:ikvpack/ikvpack.dart';
 import 'package:ikvpack_100/ikvpack.dart' as ikv100;
 import 'package:ikvpack_200/ikvpack.dart' as ikv200;
@@ -572,11 +572,11 @@ void main() async {
 
   test('Ikv.fromMap sync vs async', () async {
     void fromMap() {
-      var _ = IkvPack.fromMap(testMap);
+      IkvPack.fromMap(testMap);
     }
 
     void fromMapAsync() async {
-      var _ = await IkvPack.buildFromMapAsync(testMap);
+      await IkvPack.buildFromMapAsync(testMap);
     }
 
     var sn = _benchmarkSync(fromMap);
@@ -598,10 +598,8 @@ class _Benchmark {
   _Benchmark(this.minMicro, this.maxMicro, this.avgMicro);
 
   void prnt(String title, [bool miliseconds = false]) {
-    print(title +
-        ' - AVG:${(miliseconds ? avgMicro / 1000 : avgMicro).toStringAsFixed(1)}, '
-            'MIN:${(miliseconds ? minMicro / 1000 : minMicro).toStringAsFixed(1)}, '
-            'MAX:${(miliseconds ? maxMicro / 1000 : maxMicro).toStringAsFixed(1)}');
+    print(
+        '$title - AVG:${(miliseconds ? avgMicro / 1000 : avgMicro).toStringAsFixed(1)}, MIN:${(miliseconds ? minMicro / 1000 : minMicro).toStringAsFixed(1)}, MAX:${(miliseconds ? maxMicro / 1000 : maxMicro).toStringAsFixed(1)}');
   }
 }
 
@@ -609,7 +607,6 @@ Future<_Benchmark> _benchmark(Future Function() test,
     [int n = 20, int warmupN = 3]) async {
   var min = -1;
   var max = -1;
-  // ignore: omit_local_variable_types
   double avg = 0;
   var sw = Stopwatch();
   dynamic result;
@@ -645,7 +642,6 @@ Future<_Benchmark> _benchmark(Future Function() test,
 _Benchmark _benchmarkSync(Function test, [int n = 20, int warmupN = 3]) {
   var min = -1;
   var max = -1;
-  // ignore: omit_local_variable_types
   double avg = 0;
   var sw = Stopwatch();
   dynamic result;

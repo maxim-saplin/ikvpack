@@ -193,14 +193,12 @@ class IsolatePool {
   }
 
   int _isolatesStarted = 0;
-  // ignore: omit_local_variable_types
   double _avgMicroseconds = 0;
 
   Future start() async {
     print('Creating a pool of $numberOfIsolates running isolates');
 
     _isolatesStarted = 0;
-    // ignore: omit_local_variable_types
     _avgMicroseconds = 0;
 
     var last = Completer();

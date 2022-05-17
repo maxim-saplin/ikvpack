@@ -3,8 +3,8 @@ import 'package:ikvpack/src/ikvpack_core.dart';
 import 'package:test/test.dart';
 
 import 'shared.dart';
-import 'testBytes.dart';
-import 'testMap.dart';
+import 'test_bytes.dart';
+import 'test_map.dart';
 
 void main() async {
   group('Corner cases', () {
@@ -123,6 +123,7 @@ void main() async {
       var ik = await IkvPack.buildFromMapAsync(testMap, true, (progress) {
         progressCalledTimes++;
         if (progressCalledTimes > 2) return null;
+        return Future.value(true);
       });
       expect(ik, null);
     });
@@ -195,6 +196,7 @@ void main() async {
           testBytes.buffer.asByteData(), true, (progress) {
         progressCalledTimes++;
         if (progressCalledTimes > 2) return null;
+        return Future.value(true);
       });
       expect(ik, null);
     });

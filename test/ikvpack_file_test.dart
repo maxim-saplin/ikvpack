@@ -92,7 +92,7 @@ void runFileTests() {
 
     var thrown = false;
     try {
-      var _ = await ik['a'];
+      await ik['a'];
     } catch (_) {
       thrown = true;
     }

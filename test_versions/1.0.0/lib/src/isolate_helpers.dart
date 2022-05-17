@@ -38,7 +38,6 @@ class IsolatePool {
   Future start() async {
     print('Creating a pool of ${numberOfIsolates} running isolates');
     var isolatesStarted = 0;
-    // ignore: omit_local_variable_types
     double avgMicroseconds = 0;
 
     var last = Completer();

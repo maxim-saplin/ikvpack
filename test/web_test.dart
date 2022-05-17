@@ -7,7 +7,7 @@ import 'package:ikvpack/ikvpack.dart';
 import 'package:test/test.dart';
 
 import 'shared.dart';
-import 'testMap.dart';
+import 'test_map.dart';
 
 void main() async {
   group('Web/IndexedDB tests, db, case-insensitive', () {
