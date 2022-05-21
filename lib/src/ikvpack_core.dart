@@ -120,6 +120,7 @@ abstract class IkvPack {
       pairs.addAll(p);
     }
 
+    // TODO: Resolve issue with same dictionary multiple words (which become equal when converted to lower case)
     // Considerations on key consolidation
     // E.g. 'lucid' is looked up in 3 dictionaires (A, B and C) using shadow keys
     // A has LUCID and lucid, A contains lucid, C has Lucid
