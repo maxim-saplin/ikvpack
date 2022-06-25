@@ -1,8 +1,6 @@
 @TestOn('chrome')
 
 import 'dart:html';
-
-@TestOn('chrome')
 import 'package:ikvpack/ikvpack.dart';
 import 'package:test/test.dart';
 

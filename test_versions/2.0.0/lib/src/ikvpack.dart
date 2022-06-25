@@ -444,6 +444,7 @@ class IkvPack {
     if (end < 0) throw 'endIndex can\'t be negative';
     if (end <= start) throw 'endIndex must be greater than startIndex';
 
+    // ignore: prefer_collection_literals
     var result = LinkedHashMap<String, Uint8List>();
 
     if (_storage != null && !_storage!.useIndexToGetValue) {
@@ -470,6 +471,7 @@ class IkvPack {
     if (end < 0) throw 'endIndex can\'t be negative';
     if (end <= start) throw 'endIndex must be greater than startIndex';
 
+    // ignore: prefer_collection_literals
     var result = LinkedHashMap<String, String>();
 
     if (_storage != null && !_storage!.useIndexToGetValue) {

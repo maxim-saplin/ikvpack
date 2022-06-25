@@ -10,14 +10,14 @@ class IsolatePool {
   final List<SendPort?> isolateSendPorts = [];
   final List<Isolate> isolates = [];
   final List<bool> isolateBusy = [];
-  List<_PooledJob> jobs = [];
+  final List<_PooledJob> _jobs = [];
   int lastJobStarted = 0;
   List<Completer> jobCompleters = [];
 
   IsolatePool(this.numberOfIsolates);
 
   Future scheduleJob(PooledJob job) {
-    jobs.add(_PooledJob(job, jobs.length, -1));
+    _jobs.add(_PooledJob(job, _jobs.length, -1));
     var completer = Completer();
     jobCompleters.add(completer);
     _runJobWithVacantIsolate();
@@ -26,8 +26,8 @@ class IsolatePool {
 
   void _runJobWithVacantIsolate() {
     var availableIsolate = isolateBusy.indexOf(false);
-    if (availableIsolate > -1 && lastJobStarted < jobs.length) {
-      var job = jobs[lastJobStarted];
+    if (availableIsolate > -1 && lastJobStarted < _jobs.length) {
+      var job = _jobs[lastJobStarted];
       job.isolateIndex = availableIsolate;
       isolateSendPorts[availableIsolate]!.send(job);
       isolateBusy[availableIsolate] = true;
@@ -36,7 +36,7 @@ class IsolatePool {
   }
 
   Future start() async {
-    print('Creating a pool of ${numberOfIsolates} running isolates');
+    print('Creating a pool of $numberOfIsolates running isolates');
     var isolatesStarted = 0;
     double avgMicroseconds = 0;
 
@@ -70,7 +70,7 @@ class IsolatePool {
           if (isolatesStarted == numberOfIsolates) {
             avgMicroseconds /= numberOfIsolates;
             print('Avg time to complete starting an isolate is '
-                '${avgMicroseconds} microseconds');
+                '$avgMicroseconds microseconds');
             last.complete();
           }
         } else if (data is _PooledJobResult) {
@@ -90,7 +90,7 @@ class IsolatePool {
 
     spawnSw.stop();
 
-    print('spawn() called on ${numberOfIsolates} isolates'
+    print('spawn() called on $numberOfIsolates isolates'
         '(${spawnSw.elapsedMicroseconds} microseconds)');
 
     return last.future;
