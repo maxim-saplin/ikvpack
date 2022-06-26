@@ -133,7 +133,7 @@ abstract class IkvPack {
       pairs.addAll(p);
     }
 
-    // TODO: Resolve issue with same dictionary multiple words (which become equal when converted to lower case)
+    // UPD, 26.06.2022 fixed via introduction og getValues() method which looks up all values having same shadow key
     // Considerations on key consolidation
     // E.g. 'lucid' is looked up in 3 dictionaires (A, B and C) using shadow keys
     // A has LUCID and lucid, A contains lucid, C has Lucid
