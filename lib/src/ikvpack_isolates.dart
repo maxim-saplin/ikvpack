@@ -41,6 +41,10 @@ class IkvPackInstanceWorker extends PooledInstanceWorker {
         var ac = action as ValueAction;
         var r = _ikv.getValue(ac.key);
         return r;
+      case ValuesAction:
+        var ac = action as ValuesAction;
+        var r = _ikv.getValues(ac.key);
+        return r;
       case ValueAtAction:
         var ac = action as ValueAtAction;
         var r = _ikv.getValueAt(ac.index);
@@ -116,6 +120,12 @@ class ValueAction extends Action {
   final String key;
 
   ValueAction(this.key);
+}
+
+class ValuesAction extends Action {
+  final String key;
+
+  ValuesAction(this.key);
 }
 
 class ValueAtAction extends Action {
@@ -278,6 +288,11 @@ class IkvPackProxy implements IkvPack {
   @override
   Future<String> getValue(String key) {
     return _pi.callRemoteMethod<String>(ValueAction(key));
+  }
+
+  @override
+  Future<List<String>> getValues(String key) {
+    return _pi.callRemoteMethod<List<String>>(ValuesAction(key));
   }
 
   @override

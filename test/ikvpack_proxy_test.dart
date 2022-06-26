@@ -22,7 +22,7 @@ void main() async {
       expect(
           (await IkvPack.loadInIsolatePoolAndUseProxy(pool, 'test/testIkv.dat'))
               .sizeBytes,
-          269324);
+          269567);
     });
 
     test(

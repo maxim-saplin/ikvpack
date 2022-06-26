@@ -2219,4 +2219,13 @@ final testMap = <String, String>{
   'юродзівасьць': '<div><i>см.</i> <a href=юродзівасць>юродзівасць</a></div>',
   'язычніцтва': '<div>язычество, язычничество, поганство</div>',
   'яскравасьць': '<div><i>см.</i> <a href=яскравасць>яскравасць</a></div>',
+  'LUCID': '<div>upper case lucid </div>',
+  'lucid': '<div>lower case lucid </div>',
+  '0AA': '0AA',
+  '0Aa': '0Aa',
+  '0aA': '0aA',
+  '0aa': '0aa',
+  'BBB': 'BBB',
+  'BbB': 'BbB',
+  'Bbb': 'Bbb'
 };

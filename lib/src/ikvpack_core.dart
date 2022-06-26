@@ -57,7 +57,20 @@ abstract class IkvPack {
 
   Future<Uint8List> getValueRawCompressed(String key);
 
+  /// Returns single value for a key.
+  /// In case-insensitive mode there can be multiple keys which
+  /// are equal when converted to lower case, the first occurence is returned
   Future<String> getValue(String key);
+
+  static int getValuesRadius = 5;
+
+  /// Returns multiple values for a key.
+  /// In case-insensitive mode there can be multiple keys which
+  /// are equal when converted to lower case, the all occurences are returned.
+  /// Empty list is retuned when no values are found.
+  /// Note, the method works by searching values around the indexOf(key) location
+  /// within [IkvPack.getValuesRadius] distance
+  Future<List<String>> getValues(String key);
 
   Future<String> operator [](String key);
 
@@ -723,6 +736,34 @@ class IkvPackImpl implements IkvPack {
         ? utf8.decode(Inflate(await _storage!.value(key)).getBytes(),
             allowMalformed: true)
         : await getValueAt(index);
+  }
+
+  @pragma('vm:prefer-inline')
+  @pragma('dart2js:tryInline')
+  @override
+  Future<List<String>> getValues(String key) async {
+    var r = <String>[];
+    if (keysCaseInsensitive) {
+      key = key.toLowerCase();
+    }
+    var i = indexOf(key);
+
+    if (i > 0) {
+      if (shadowKeysUsed) {
+        var start = max<int>(0, i - IkvPack.getValuesRadius);
+        var end = min<int>(length, i + IkvPack.getValuesRadius);
+
+        for (i = start; i < end; i++) {
+          if (key == _shadowKeys[i]) {
+            r.add(await getValueAt(i));
+          }
+        }
+      } else {
+        r.add(await getValueAt(i));
+      }
+    }
+
+    return r;
   }
 
   @pragma('vm:prefer-inline')

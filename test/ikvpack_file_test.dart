@@ -26,8 +26,10 @@ void main() async {
 
     sb.write(']);');
 
-    File('test/testBytes.dart').writeAsString(sb.toString());
+    File('test/test_bytes.dart').writeAsString(sb.toString());
   }
+
+  //saveTestMapBytes();
 
   tearDownAll(() {
     var tmpDir = Directory('tmp');
@@ -35,9 +37,9 @@ void main() async {
   });
 
   group('File tests, case-insensitive', () {
-    //saveTestMapBytes();
-    //var ikv = IkvPack.fromMap(testMap, true);
-    //ikv.saveTo('testIkv.dat');
+    // saveTestMapBytes();
+    // var ikv = IkvPack.fromMap(testMap, true);
+    // ikv.saveTo('test/testIkv.dat');
     setUpAll(() async {
       setIkv(await IkvPack.load('test/testIkv.dat', true));
     });
@@ -47,7 +49,7 @@ void main() async {
 
     test('Stats is fecthed', () async {
       var stats = await ikv.getStats();
-      expect(stats.keysNumber, 1436);
+      expect(stats.keysNumber, 1445);
     });
 
     test('Stats is fecthed as CSV', () async {
@@ -100,13 +102,13 @@ void runFileTests() {
   });
 
   test('Files size is properly returned', () async {
-    expect((await IkvPack.load('test/testIkv.dat')).sizeBytes, 269324);
+    expect((await IkvPack.load('test/testIkv.dat')).sizeBytes, 269567);
   });
 
   test('IkvInfo is properly returned', () async {
     var info = await IkvPack.getInfo('test/testIkv.dat');
-    expect(info.sizeBytes, 269324);
-    expect(info.count, 1436);
+    expect(info.sizeBytes, 269567);
+    expect(info.count, 1445);
   });
 
   test('File can be deleted', () async {

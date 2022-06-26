@@ -36,7 +36,7 @@ void main() async {
     test('IkvInfo is properly returned', () async {
       var info = await IkvPack.getInfo('test/testIkv.dat');
       expect(info.sizeBytes, -1);
-      expect(info.count, 1436);
+      expect(info.count, 1445);
     });
 
     test('IndexedDB can be deleted', () async {

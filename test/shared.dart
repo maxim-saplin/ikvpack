@@ -18,42 +18,49 @@ IkvPack get ikv => _ikv;
 void runCaseInvariantTests([bool proxySkip = false]) {
   test('Can serach key by index', () {
     var k = _ikv.keys[0];
-    expect(k, '36');
-    k = _ikv.keys[1];
+    expect(k, '0AA');
+    k = _ikv.keys[5];
     expect(k, 'Aaron Burr');
   }, skip: proxySkip);
 
   test('Can get value by index', () async {
-    var v = await _ikv.getValueAt(0);
+    var v = await _ikv.getValueAt(4);
     expect(
         v.startsWith(
             '<div><i>adjective</i></div><div>being six more than thirty'),
         true);
-    v = await _ikv.getValueAt(1);
+    v = await _ikv.getValueAt(5);
     expect(
         v.startsWith(
             '<div><i>noun</i></div><div>United States politician who served'),
         true);
   });
 
+  test('Can get a value through getValues())', () async {
+    var v = await _ikv.getValues('зараць');
+    expect(v[0], '<div>вспахать</div>');
+  });
+
   test('Getting raw range works', () async {
     var range = await _ikv.getRangeRaw(1, 11);
     expect(range.length, 11);
-    var x = range.entries.first;
+    var x = range.entries.skip(4).first;
     expect(x.key, 'Aaron Burr');
   });
 
   test('Getting range works', () async {
     var range = await _ikv.getRange(1, 11);
     expect(range.length, 11);
-    var x = range.entries.first;
+    var x = range.entries.skip(4).first;
     expect(x.key, 'Aaron Burr');
     expect(x.value,
         '<div><i>noun</i></div><div>United States politician who served as vice president under Jefferson; he mortally wounded his political rival Alexander Hamilton in a duel and fled south <i>(1756-1836)</i></div><div><span>•</span> <i>Syn</i>: ↑<a href=Burr>Burr</a></div><div><span>•</span> <i>Instance Hypernyms</i>: ↑<a href=politician>politician</a>, ↑<a href=politico>politico</a>, ↑<a href=pol>pol</a>, ↑<a href=political leader>political leader</a></div>');
   });
 
-  test('Can get value by key', () async {
+  test('Can get value by key (getValue)', () async {
     var v = await _ikv['зараць'];
+    expect(v, '<div>вспахать</div>');
+    v = await _ikv.getValue('зараць');
     expect(v, '<div>вспахать</div>');
   });
 
@@ -114,6 +121,29 @@ void runCaseInsensitiveTests([bool proxySkip = false]) {
         v.startsWith(
             '<div><b>I</b></div><div><i>noun</i></div><div>an official language of the'),
         true);
+  });
+
+  test('Can get multiple value by case insensitive key (getValues)', () async {
+    var v = await _ikv.getValues('зараць');
+    expect(v[0], '<div>вспахать</div>');
+
+    v = await _ikv.getValues('lucid');
+    expect(v.length, 2);
+    expect(v[0], '<div>lower case lucid </div>');
+    expect(v[1], '<div>upper case lucid </div>');
+
+    v = await _ikv.getValues('0aA');
+    expect(v.length, 4);
+    expect(v[0], '0AA');
+    expect(v[1], '0Aa');
+    expect(v[2], '0aA');
+    expect(v[3], '0aa');
+
+    v = await _ikv.getValues('bbb');
+    expect(v.length, 3);
+    expect(v.contains('BBB'), true);
+    expect(v.contains('Bbb'), true);
+    expect(v.contains('BbB'), true);
   });
 
   test('Keys are sorted', () {
@@ -227,14 +257,14 @@ void runStorageInvariantTests() {
   test('Data is read correctly (w. IkvMap.fromBytes)', () async {
     var ik = IkvPack.fromBytes(testBytes.buffer.asByteData());
 
-    expect(ik.length, 1436);
+    expect(ik.length, 1445);
     expect(await ik['nonechoic'],
         '<div><i>adjective</i></div><div>not echoic or imitative of sound</div><div><span>•</span> <i>Ant</i>: ↑<a href=echoic>echoic</a></div>');
 
     await ik.saveTo('tmp/test.dat');
     ik = await IkvPack.load('tmp/test.dat');
 
-    expect(ik.length, 1436);
+    expect(ik.length, 1445);
     expect(await ik['nonechoic'],
         '<div><i>adjective</i></div><div>not echoic or imitative of sound</div><div><span>•</span> <i>Ant</i>: ↑<a href=echoic>echoic</a></div>');
   });
