@@ -72,4 +72,55 @@ void main() async {
     expect(await ikv2['bb'], 'bb');
     expect(await ikv3['ccc'], 'ccc');
   });
+
+  test('Empty files are correctly handled', () async {
+    File('tmp/ikv1.ikv').createSync();
+    File('tmp/ikv2.ikv').createSync();
+    File('tmp/ikv3.ikv').createSync();
+
+    expect(File('tmp/ikv1.ikv').lengthSync(), 0);
+    expect(File('tmp/ikv2.ikv').lengthSync(), 0);
+    expect(File('tmp/ikv3.ikv').lengthSync(), 0);
+
+    putIntoSingleFile([
+      'tmp/ikv1.ikv',
+      'tmp/ikv2.ikv',
+      'tmp/ikv3.ikv',
+    ], 'tmp/ikv.mikv');
+
+    expect(File('tmp/ikv.mikv').existsSync(), true);
+
+    extractFromSingleFile('tmp/ikv.mikv', 'tmp');
+
+    expect(File('tmp/ikv.part1.ikv').lengthSync(), 0);
+    expect(File('tmp/ikv.part1.ikv').lengthSync(), 0);
+    expect(File('tmp/ikv.part1.ikv').lengthSync(), 0);
+  });
+
+  test(
+      'Empty files are correctly handled and one non-emty are correctly handled',
+      () async {
+    File('tmp/ikv1.ikv').createSync();
+    var m2 = <String, String>{'aa': 'aa', 'bb': 'bb'};
+    var ikv2 = IkvPack.fromMap(m2);
+    await ikv2.saveTo('tmp/ikv2.ikv');
+
+    expect(File('tmp/ikv1.ikv').lengthSync(), 0);
+
+    putIntoSingleFile([
+      'tmp/ikv1.ikv',
+      'tmp/ikv2.ikv',
+    ], 'tmp/ikv.mikv');
+
+    expect(File('tmp/ikv.mikv').existsSync(), true);
+
+    extractFromSingleFile('tmp/ikv.mikv', 'tmp');
+
+    expect(File('tmp/ikv.part1.ikv').lengthSync(), 0);
+
+    ikv2 = await IkvPack.load('tmp/ikv.part2.ikv');
+
+    expect(ikv2.length, 2);
+    expect(await ikv2['bb'], 'bb');
+  });
 }
