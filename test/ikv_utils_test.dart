@@ -1,6 +1,7 @@
 @TestOn('vm')
 
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:ikvpack/ikvpack.dart';
 import 'package:test/test.dart';
 
@@ -122,5 +123,57 @@ void main() async {
 
     expect(ikv2.length, 2);
     expect(await ikv2['bb'], 'bb');
+  });
+
+  test('Exception is thrown when reading invalid file', () async {
+    File('tmp/ikv1.ikv').createSync();
+    var m2 = <String, String>{'aa': 'aa', 'bb': 'bb'};
+    var ikv2 = IkvPack.fromMap(m2);
+    await ikv2.saveTo('tmp/ikv2.ikv');
+
+    expect(File('tmp/ikv1.ikv').lengthSync(), 0);
+
+    putIntoSingleFile([
+      'tmp/ikv1.ikv',
+      'tmp/ikv2.ikv',
+    ], 'tmp/ikv.mikv');
+
+    expect(File('tmp/ikv.mikv').existsSync(), true);
+    var raf = File('tmp/ikv.mikv').openSync(mode: FileMode.writeOnlyAppend);
+    try {
+      raf.writeByteSync(0);
+      raf.flushSync();
+      expect(
+          () => extractFromSingleFile('tmp/ikv.mikv', 'tmp'),
+          throwsA(isA<String>().having((error) => error, '',
+              'The file appers to be of an unsupported format')));
+
+      raf.truncateSync(raf.lengthSync() - 1);
+      raf.flushSync();
+
+      extractFromSingleFile('tmp/ikv.mikv', 'tmp');
+      expect(File('tmp/ikv.part1.ikv').existsSync(), true);
+      expect(File('tmp/ikv.part2.ikv').existsSync(), true);
+
+      raf.setPositionSync(raf.lengthSync() - 16);
+      var x = Uint64List(1);
+      x[0] = maxCount + 1;
+      raf.writeFromSync(x.buffer.asUint8List());
+      raf.flushSync();
+
+      expect(
+          () => extractFromSingleFile('tmp/ikv.mikv', 'tmp'),
+          throwsA(isA<String>().having((error) => error, '',
+              'Too many items ${maxCount + 1}, maximum allowed is $maxCount')));
+
+      raf.truncateSync(15);
+
+      expect(
+          () => extractFromSingleFile('tmp/ikv.mikv', 'tmp'),
+          throwsA(isA<String>().having((error) => error, '',
+              'Invalid file, too short, at least 16 bytes expected for headers')));
+    } finally {
+      raf.closeSync();
+    }
   });
 }

@@ -35,7 +35,7 @@ class MergedFileHeaders {
 
     count = sixtenBytes.getUint64(0, Endian.little);
     if (count > maxCount) {
-      throw 'Too many items $count, maximum allowd is $maxCount';
+      throw 'Too many items $count, maximum allowed is $maxCount';
     }
     if (count * 8 + 16 > length) {
       throw 'Invalid file, too short, the reported count is more than the number of offsets that can fit';
