@@ -60,8 +60,9 @@ void main() async {
     expect(File('tmp/ikv.mikv').existsSync(), true);
     deleteFiles(false);
 
-    extractFromSingleFile('tmp/ikv.mikv', 'tmp');
+    var c = extractFromSingleFile('tmp/ikv.mikv', 'tmp');
 
+    expect(c, 3);
     ikv1 = await IkvPack.load('tmp/ikv.part1.ikv');
     ikv2 = await IkvPack.load('tmp/ikv.part2.ikv');
     ikv3 = await IkvPack.load('tmp/ikv.part3.ikv');
@@ -91,8 +92,9 @@ void main() async {
 
     expect(File('tmp/ikv.mikv').existsSync(), true);
 
-    extractFromSingleFile('tmp/ikv.mikv', 'tmp');
+    var c = extractFromSingleFile('tmp/ikv.mikv', 'tmp');
 
+    expect(c, 3);
     expect(File('tmp/ikv.part1.ikv').lengthSync(), 0);
     expect(File('tmp/ikv.part1.ikv').lengthSync(), 0);
     expect(File('tmp/ikv.part1.ikv').lengthSync(), 0);
@@ -115,8 +117,9 @@ void main() async {
 
     expect(File('tmp/ikv.mikv').existsSync(), true);
 
-    extractFromSingleFile('tmp/ikv.mikv', 'tmp');
+    var c = extractFromSingleFile('tmp/ikv.mikv', 'tmp');
 
+    expect(c, 2);
     expect(File('tmp/ikv.part1.ikv').lengthSync(), 0);
 
     ikv2 = await IkvPack.load('tmp/ikv.part2.ikv');
@@ -151,7 +154,8 @@ void main() async {
       raf.truncateSync(raf.lengthSync() - 1);
       raf.flushSync();
 
-      extractFromSingleFile('tmp/ikv.mikv', 'tmp');
+      var c = extractFromSingleFile('tmp/ikv.mikv', 'tmp');
+      expect(c, 2);
       expect(File('tmp/ikv.part1.ikv').existsSync(), true);
       expect(File('tmp/ikv.part2.ikv').existsSync(), true);
 

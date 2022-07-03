@@ -113,9 +113,10 @@ void putIntoSingleFile(Iterable<String> files, String outputFile) {
 /// Takes as an input the merged by [putIntoSingleFile] file and extracts them into
 /// the given folder with the names following the convestion (fileName).part{x}.(extension)
 /// where {x} is the ordinal number, (extension is provided in the given class)
-void extractFromSingleFile(String filePath, String outputDir,
+int extractFromSingleFile(String filePath, String outputDir,
     [String extension = '.ikv']) {
   var raf = File(filePath).openSync(mode: FileMode.read);
+  var count = 0;
   try {
     var header = MergedFileHeaders.fromFile(raf);
     raf.setPositionSync(0);
@@ -144,9 +145,12 @@ void extractFromSingleFile(String filePath, String outputDir,
         }
       } finally {
         f.closeSync();
+        count++;
       }
     }
   } finally {
     raf.closeSync();
   }
+
+  return count;
 }
