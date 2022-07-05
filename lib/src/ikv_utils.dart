@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:ikvpack/ikvpack.dart';
 import 'package:path/path.dart' as path;
 
 const blockSize = 4 * 1024;
@@ -152,5 +153,28 @@ int extractFromSingleFile(String filePath, String outputDir,
     raf.closeSync();
   }
 
+  return count;
+}
+
+class _ExrtactPooledJob extends PooledJob<int> {
+  _ExrtactPooledJob(this.filePath, this.outputDir, this.extension);
+
+  final String filePath;
+  final String outputDir;
+  final String extension;
+
+  @override
+  Future<int> job() async {
+    var count = extractFromSingleFile(filePath, outputDir, extension);
+
+    return count;
+  }
+}
+
+Future<int> extractFromSingleFilePooled(
+    String filePath, String outputDir, IsolatePool pool,
+    [String extension = '.ikv']) async {
+  var job = _ExrtactPooledJob(filePath, outputDir, extension);
+  var count = await pool.scheduleJob<int>(job);
   return count;
 }
