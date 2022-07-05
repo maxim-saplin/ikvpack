@@ -37,7 +37,14 @@ void main() async {
   test(
       'Ikv is saved to files, merged, unmerged and correct Ikv data is read back',
       () async {
-    var m1 = <String, String>{'a': 'a'};
+    var m1 = <String, String>{
+      'a': 'a',
+      'aa': 'aa',
+      'bb': 'bb',
+      'aaa': 'aaa',
+      'bbb': 'bbb',
+      'ccc': 'ccc'
+    };
     var m2 = <String, String>{'aa': 'aa', 'bb': 'bb'};
     var m3 = <String, String>{'aaa': 'aaa', 'bbb': 'bbb', 'ccc': 'ccc'};
     for (var i = 0; i < 1000; i++) {
@@ -50,6 +57,10 @@ void main() async {
     await ikv1.saveTo('tmp/ikv1.ikv');
     await ikv2.saveTo('tmp/ikv2.ikv');
     await ikv3.saveTo('tmp/ikv3.ikv');
+
+    var length1 = File('tmp/ikv1.ikv').lengthSync();
+    var length2 = File('tmp/ikv2.ikv').lengthSync();
+    var length3 = File('tmp/ikv3.ikv').lengthSync();
 
     putIntoSingleFile([
       'tmp/ikv1.ikv',
@@ -67,7 +78,15 @@ void main() async {
     ikv2 = await IkvPack.load('tmp/ikv.part2.ikv');
     ikv3 = await IkvPack.load('tmp/ikv.part3.ikv');
 
-    expect(ikv1.length, 1);
+    var length21 = File('tmp/ikv.part1.ikv').lengthSync();
+    var length22 = File('tmp/ikv.part2.ikv').lengthSync();
+    var length23 = File('tmp/ikv.part3.ikv').lengthSync();
+
+    expect(length1, length21);
+    expect(length2, length22);
+    expect(length3, length23);
+
+    expect(ikv1.length, 6);
     expect(ikv2.length, 2);
     expect(ikv3.length, 1003);
     expect(await ikv1['a'], 'a');

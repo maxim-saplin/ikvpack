@@ -115,13 +115,14 @@ void putIntoSingleFile(Iterable<String> files, String outputFile) {
 /// the given folder with the names following the convestion (fileName).part{x}.(extension)
 /// where {x} is the ordinal number, (extension is provided in the given class)
 int extractFromSingleFile(String filePath, String outputDir,
-    [String extension = '.ikv']) {
+    [String extension = '.ikv', String fileNameTemplate = '']) {
   var raf = File(filePath).openSync(mode: FileMode.read);
   var count = 0;
   try {
     var header = MergedFileHeaders.fromFile(raf);
     raf.setPositionSync(0);
-    var name = path.basenameWithoutExtension(filePath);
+    var name = path.basenameWithoutExtension(
+        fileNameTemplate.isNotEmpty ? fileNameTemplate : filePath);
     var buffer = Uint8List(blockSize);
 
     for (var i = 0; i < header.count; i++) {
@@ -132,7 +133,7 @@ int extractFromSingleFile(String filePath, String outputDir,
         //var start = header.offsets[i];
         var length = i < header.offsets.length - 1
             ? header.offsets[i + 1] - header.offsets[i]
-            : raf.lengthSync() - header.sizeInBytes;
+            : raf.lengthSync() - header.sizeInBytes - header.offsets[i];
 
         int blocks = length ~/ blockSize;
         int remainingBytes = length % blockSize;
@@ -157,15 +158,18 @@ int extractFromSingleFile(String filePath, String outputDir,
 }
 
 class _ExrtactPooledJob extends PooledJob<int> {
-  _ExrtactPooledJob(this.filePath, this.outputDir, this.extension);
+  _ExrtactPooledJob(
+      this.filePath, this.outputDir, this.extension, this.fileNameTemplate);
 
   final String filePath;
   final String outputDir;
   final String extension;
+  final String fileNameTemplate;
 
   @override
   Future<int> job() async {
-    var count = extractFromSingleFile(filePath, outputDir, extension);
+    var count =
+        extractFromSingleFile(filePath, outputDir, extension, fileNameTemplate);
 
     return count;
   }
@@ -173,8 +177,8 @@ class _ExrtactPooledJob extends PooledJob<int> {
 
 Future<int> extractFromSingleFilePooled(
     String filePath, String outputDir, IsolatePool pool,
-    [String extension = '.ikv']) async {
-  var job = _ExrtactPooledJob(filePath, outputDir, extension);
+    [String extension = '.ikv', String fileNameTemplate = '']) async {
+  var job = _ExrtactPooledJob(filePath, outputDir, extension, fileNameTemplate);
   var count = await pool.scheduleJob<int>(job);
   return count;
 }
