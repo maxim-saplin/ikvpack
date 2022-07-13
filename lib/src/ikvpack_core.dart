@@ -743,8 +743,13 @@ class IkvPackImpl implements IkvPack {
   @override
   Future<List<String>> getValues(String key) async {
     var r = <String>[];
+    var list = _originalKeys;
     if (keysCaseInsensitive) {
       key = key.toLowerCase();
+    }
+    if (_shadowKeysUsed) {
+      key = fixOutOfOrder(key);
+      list = _shadowKeys;
     }
     var i = indexOf(key);
 
@@ -754,7 +759,7 @@ class IkvPackImpl implements IkvPack {
         var end = min<int>(length, i + IkvPack.getValuesRadius);
 
         for (i = start; i < end; i++) {
-          if (key == _shadowKeys[i]) {
+          if (key == list[i]) {
             r.add(await getValueAt(i));
           }
         }

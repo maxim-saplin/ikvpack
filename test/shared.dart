@@ -214,6 +214,34 @@ void runCaseInsensitiveTests([bool proxySkip = false]) {
   });
 
   test(
+      'Can get value/values by keys returned via keysStartingWith() (getValue/getValues)',
+      () async {
+    var k = await _ikv.keysStartingWith('фі');
+    expect(k.length, 2);
+    expect(k[0].original, 'фіёрд');
+    expect(k[1].original, 'філялягічны');
+
+    var v = await _ikv.getValue(k[0].original);
+    expect(v, '<div>фиорд</div>');
+    v = await _ikv.getValue(k[1].original);
+    expect(v, '<div><i>см.</i> <a href=філалагічны>філалагічны</a></div>');
+
+    var v2 = await _ikv.getValues(k[0].original);
+    expect(v2[0], '<div>фиорд</div>');
+    v2 = await _ikv.getValues(k[1].original);
+    expect(v2[0], '<div><i>см.</i> <a href=філалагічны>філалагічны</a></div>');
+
+    k = await _ikv.keysStartingWith('эў');
+    expect(k.length, 1);
+    expect(k[0].original, 'эўфанія');
+
+    v = await _ikv.getValue(k[0].original);
+    expect(v, '<div>эвфония</div>');
+    v2 = await _ikv.getValues(k[0].original);
+    expect(v2[0], '<div>эвфония</div>');
+  });
+
+  test(
       'Consolidated keysStartingWith() doesn\'t fail for exact single key (bug fix)',
       () async {
     var m = <String, String>{'': '', 'wew': 'dsdsd', 'sss': '', 'sdss': 'd'};
