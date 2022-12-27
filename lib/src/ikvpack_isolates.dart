@@ -1,6 +1,6 @@
 part of ikvpack_core;
 
-class IkvPackInstanceWorker extends PooledInstanceWorker {
+class IkvPackInstanceWorker extends PooledInstance {
   late IkvPack _ikv;
 
   @override
@@ -158,13 +158,13 @@ class IkvPackProxy implements IkvPack {
   IkvPackProxy._(String path, [this._keysCaseInsensitive = true])
       : _valuesInMemory = false;
 
-  late PooledInstance _pi;
+  late PooledInstanceProxy _pi;
 
   static Future<IkvPack> loadInIsolatePoolAndUseProxy(
       IsolatePool pool, String path,
       [keysCaseInsensitive = true]) async {
     var ikv = IkvPackProxy._(path, keysCaseInsensitive);
-    ikv._pi = await pool.createInstance(IkvPackInstanceWorker(), (action) {
+    ikv._pi = await pool.addInstance(IkvPackInstanceWorker(), (action) {
       switch (action.runtimeType) {
         case SaveToCallbackAction:
           return ikv._saveToCallback != null

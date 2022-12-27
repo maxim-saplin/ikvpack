@@ -8,7 +8,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
-import 'package:ikvpack/ikvpack.dart';
+import 'package:isolate_pool_2/isolate_pool_2.dart';
 
 import 'storage_impl/storage_vm.dart'
     if (dart.library.io) 'storage_impl/storage_vm.dart'

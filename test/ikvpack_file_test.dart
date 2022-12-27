@@ -2,6 +2,7 @@
 
 import 'dart:io';
 import 'package:ikvpack/ikvpack.dart';
+import 'package:isolate_pool_2/isolate_pool_2.dart';
 import 'package:test/test.dart';
 
 import 'shared.dart';

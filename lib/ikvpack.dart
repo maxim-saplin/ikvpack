@@ -9,5 +9,4 @@ library ikvpack;
 
 export 'src/ikvpack_core.dart'
     show IkvPack, IkvPackProxy, IkvInfo, fixOutOfOrder;
-export 'src/isolate_helpers.dart';
 export 'src/ikv_utils.dart';

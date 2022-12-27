@@ -3,6 +3,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:isolate_pool_2/isolate_pool_2.dart';
 import 'package:test/test.dart';
 import 'test_map.dart';
 import 'package:ikvpack/ikvpack.dart';
