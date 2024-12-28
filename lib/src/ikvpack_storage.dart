@@ -1,4 +1,4 @@
-part of ikvpack_core;
+part of 'ikvpack_core.dart';
 
 /// Binary layout
 ///

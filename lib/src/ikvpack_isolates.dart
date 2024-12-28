@@ -1,4 +1,4 @@
-part of ikvpack_core;
+part of 'ikvpack_core.dart';
 
 class IkvPackInstanceWorker extends PooledInstance {
   late IkvPack _ikv;
@@ -12,48 +12,48 @@ class IkvPackInstanceWorker extends PooledInstance {
   Future<dynamic> receiveRemoteCall(Action action) async {
     //print('Isolate - Action received - ${action.runtimeType}');
     switch (action.runtimeType) {
-      case LoadAction:
+      case LoadAction _:
         var ac = action as LoadAction;
         _ikv = await IkvPack.load(ac.path, ac.keysCaseInsensitive);
         var r = LoadActionResult(_ikv.length, _ikv.sizeBytes,
             _ikv.shadowKeysUsed, _ikv.noOutOfOrderFlag, _ikv.noUpperCaseFlag);
         return r;
-      case GetRangeAction:
+      case GetRangeAction _:
         var ac = action as GetRangeAction;
         var r = _ikv.getRange(ac.startIndex, ac.endIndex);
         return r;
-      case GetRangeRawAction:
+      case GetRangeRawAction _:
         var ac = action as GetRangeRawAction;
         var r = _ikv.getRangeRaw(ac.startIndex, ac.endIndex);
         return r;
-      case GetStatsAction:
+      case GetStatsAction _:
         var r = _ikv.getStats();
         return r;
-      case KeysStartingWithAction:
+      case KeysStartingWithAction _:
         var ac = action as KeysStartingWithAction;
         var r = _ikv.keysStartingWith(ac.key, ac.maxResults);
         return r;
-      case SaveToAction:
+      case SaveToAction _:
         var ac = action as SaveToAction;
         var r = _ikv.saveTo(ac.path);
         return r;
-      case ValueAction:
+      case ValueAction _:
         var ac = action as ValueAction;
         var r = _ikv.getValue(ac.key);
         return r;
-      case ValuesAction:
+      case ValuesAction _:
         var ac = action as ValuesAction;
         var r = _ikv.getValues(ac.key);
         return r;
-      case ValueAtAction:
+      case ValueAtAction _:
         var ac = action as ValueAtAction;
         var r = _ikv.getValueAt(ac.index);
         return r;
-      case ValueRawConpressedAction:
+      case ValueRawConpressedAction _:
         var ac = action as ValueRawConpressedAction;
         var r = _ikv.getValueRawCompressed(ac.key);
         return r;
-      case ValueRawConpressedAtAction:
+      case ValueRawConpressedAtAction _:
         var ac = action as ValueRawConpressedAtAction;
         var r = _ikv.getValueRawCompressedAt(ac.index);
         return r;
@@ -166,7 +166,7 @@ class IkvPackProxy implements IkvPack {
     var ikv = IkvPackProxy._(path, keysCaseInsensitive);
     ikv._pi = await pool.addInstance(IkvPackInstanceWorker(), (action) {
       switch (action.runtimeType) {
-        case SaveToCallbackAction:
+        case SaveToCallbackAction _:
           return ikv._saveToCallback != null
               ? ikv._saveToCallback!(
                   (action as SaveToCallbackAction).progressPercent)

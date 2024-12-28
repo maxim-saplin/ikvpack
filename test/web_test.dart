@@ -1,4 +1,5 @@
 @TestOn('chrome')
+library;
 
 import 'dart:html';
 import 'package:ikvpack/ikvpack.dart';

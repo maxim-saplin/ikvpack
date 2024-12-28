@@ -186,7 +186,7 @@ class IkvPack {
   /// Building the object can be time consuming and can block the main UI thread, splitting the
   /// build into multiple microtasks via awaiting updateProgress claback (and giving control up the stream).
   /// If the progress callback returns null build process is canceled, the method returns null
-  /// Future<bool> _awaitableUpdateProgeress(int progress) {
+  /// [Future<bool>] _awaitableUpdateProgeress(int progress) {
   ///  if (_canceled) return null;
   ///  return Future(() {
   ///    propgressProperty = progress;

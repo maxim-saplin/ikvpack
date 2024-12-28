@@ -169,13 +169,13 @@ void deleteFromPath(String path) {
 }
 
 void saveToPath(String path, List<String> keys, List<List<int>> values) {
-  void _writeUint32(RandomAccessFile raf, int value) {
+  void writeUint32(RandomAccessFile raf, int value) {
     var bd = ByteData(4);
     bd.setUint32(0, value);
     raf.writeFromSync(bd.buffer.asUint8List());
   }
 
-  void _writeUint16(RandomAccessFile raf, int value) {
+  void writeUint16(RandomAccessFile raf, int value) {
     var bd = ByteData(2);
     bd.setUint16(0, value);
     raf.writeFromSync(bd.buffer.asUint8List());
@@ -184,21 +184,21 @@ void saveToPath(String path, List<String> keys, List<List<int>> values) {
   var raf = File(path).openSync(mode: FileMode.write);
   try {
     raf.setPositionSync(4); //skip reserved
-    _writeUint32(raf, keys.length);
+    writeUint32(raf, keys.length);
     raf.setPositionSync(16); //skip offsets and values headers
     for (var k in keys) {
       var line = utf8.encode(k);
-      _writeUint16(raf, line.length);
+      writeUint16(raf, line.length);
       raf.writeFromSync(line);
     }
     // write offsets posisition
     var offsetsOffset = raf.positionSync();
     raf.setPositionSync(8);
-    _writeUint32(raf, offsetsOffset);
+    writeUint32(raf, offsetsOffset);
 
     // move to values section start
     var valuesOffset = offsetsOffset + 8 * keys.length;
-    _writeUint32(raf, valuesOffset); // write values posisition
+    writeUint32(raf, valuesOffset); // write values posisition
     raf.setPositionSync(valuesOffset);
     var offsets = <_OffsetLength>[];
 
@@ -212,8 +212,8 @@ void saveToPath(String path, List<String> keys, List<List<int>> values) {
     // write offsets
     raf.setPositionSync(offsetsOffset);
     for (var ol in offsets) {
-      _writeUint32(raf, ol.offset);
-      _writeUint32(raf, ol.length);
+      writeUint32(raf, ol.offset);
+      writeUint32(raf, ol.length);
     }
 
     //  write values
