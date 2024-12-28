@@ -10,55 +10,33 @@ class IkvPackInstanceWorker extends PooledInstance {
 
   @override
   Future<dynamic> receiveRemoteCall(Action action) async {
-    //print('Isolate - Action received - ${action.runtimeType}');
-    switch (action.runtimeType) {
-      case LoadAction _:
-        var ac = action as LoadAction;
-        _ikv = await IkvPack.load(ac.path, ac.keysCaseInsensitive);
-        var r = LoadActionResult(_ikv.length, _ikv.sizeBytes,
+    switch (action) {
+      case LoadAction(:var path, :var keysCaseInsensitive):
+        _ikv = await IkvPack.load(path, keysCaseInsensitive);
+        return LoadActionResult(_ikv.length, _ikv.sizeBytes,
             _ikv.shadowKeysUsed, _ikv.noOutOfOrderFlag, _ikv.noUpperCaseFlag);
-        return r;
-      case GetRangeAction _:
-        var ac = action as GetRangeAction;
-        var r = _ikv.getRange(ac.startIndex, ac.endIndex);
-        return r;
-      case GetRangeRawAction _:
-        var ac = action as GetRangeRawAction;
-        var r = _ikv.getRangeRaw(ac.startIndex, ac.endIndex);
-        return r;
-      case GetStatsAction _:
-        var r = _ikv.getStats();
-        return r;
-      case KeysStartingWithAction _:
-        var ac = action as KeysStartingWithAction;
-        var r = _ikv.keysStartingWith(ac.key, ac.maxResults);
-        return r;
-      case SaveToAction _:
-        var ac = action as SaveToAction;
-        var r = _ikv.saveTo(ac.path);
-        return r;
-      case ValueAction _:
-        var ac = action as ValueAction;
-        var r = _ikv.getValue(ac.key);
-        return r;
-      case ValuesAction _:
-        var ac = action as ValuesAction;
-        var r = _ikv.getValues(ac.key);
-        return r;
-      case ValueAtAction _:
-        var ac = action as ValueAtAction;
-        var r = _ikv.getValueAt(ac.index);
-        return r;
-      case ValueRawConpressedAction _:
-        var ac = action as ValueRawConpressedAction;
-        var r = _ikv.getValueRawCompressed(ac.key);
-        return r;
-      case ValueRawConpressedAtAction _:
-        var ac = action as ValueRawConpressedAtAction;
-        var r = _ikv.getValueRawCompressedAt(ac.index);
-        return r;
+      case GetRangeAction(:var startIndex, :var endIndex):
+        return _ikv.getRange(startIndex, endIndex);
+      case GetRangeRawAction(:var startIndex, :var endIndex):
+        return _ikv.getRangeRaw(startIndex, endIndex);
+      case GetStatsAction():
+        return _ikv.getStats();
+      case KeysStartingWithAction(:var key, :var maxResults):
+        return _ikv.keysStartingWith(key, maxResults);
+      case SaveToAction(:var path):
+        return _ikv.saveTo(path);
+      case ValueAction(:var key):
+        return _ikv.getValue(key);
+      case ValuesAction(:var key):
+        return _ikv.getValues(key);
+      case ValueAtAction(:var index):
+        return _ikv.getValueAt(index);
+      case ValueRawConpressedAction(:var key):
+        return _ikv.getValueRawCompressed(key);
+      case ValueRawConpressedAtAction(:var index):
+        return _ikv.getValueRawCompressedAt(index);
       default:
-        throw 'Unknow action ${action.runtimeType}';
+        throw 'Unknown action ${action.runtimeType}';
     }
   }
 }

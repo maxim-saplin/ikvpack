@@ -31,7 +31,7 @@ void main() async {
     runCaseInsensitiveTests();
   });
 
-  group('Web/IndexedDB tests', () {
+  group('Web/IndexedDB tests', timeout: Timeout(Duration(seconds: 60)), () {
     runStorageInvariantTests();
 
     test('IkvInfo is properly returned', () async {

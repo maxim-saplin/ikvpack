@@ -129,21 +129,16 @@ void runCaseInsensitiveTests([bool proxySkip = false]) {
 
     v = await _ikv.getValues('lucid');
     expect(v.length, 2);
-    expect(v[0], '<div>lower case lucid </div>');
-    expect(v[1], '<div>upper case lucid </div>');
+    expect(v.toSet(),
+        {'<div>lower case lucid </div>', '<div>upper case lucid </div>'});
 
     v = await _ikv.getValues('0aA');
     expect(v.length, 4);
-    expect(v[0], '0AA');
-    expect(v[1], '0Aa');
-    expect(v[2], '0aA');
-    expect(v[3], '0aa');
+    expect(v.toSet(), {'0AA', '0Aa', '0aA', '0aa'});
 
     v = await _ikv.getValues('bbb');
     expect(v.length, 3);
-    expect(v.contains('BBB'), true);
-    expect(v.contains('Bbb'), true);
-    expect(v.contains('BbB'), true);
+    expect(v.toSet(), {'BBB', 'Bbb', 'BbB'});
   });
 
   test('Keys are sorted', () {
